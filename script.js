@@ -200,7 +200,7 @@
     }
 
     // --- Handle Submit ---
-    async function handleSubmit() {
+    function handleSubmit() {
         if (state.isSubmitting) return;
 
         const clipLink = dom.clipLink.value.trim();
@@ -217,58 +217,50 @@
             return;
         }
 
+        // Lock submit to prevent double click
         state.isSubmitting = true;
-        dom.submitBtn.classList.add('loading');
-        dom.submitBtn.disabled = true;
 
-        try {
-            const response = await fetch(state.scriptUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    clipLink: clipLink,
-                    shopLink: shopLink,
-                    sheet: state.selectedSheet,
-                }),
-            });
+        // 1. Send data to Google Sheets in the background (Non-blocking)
+        fetch(state.scriptUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                clipLink: clipLink,
+                shopLink: shopLink,
+                sheet: state.selectedSheet,
+            }),
+        }).catch(error => {
+            console.error('Background send error:', error);
+            showToast('ส่งข้อมูลล้มเหลว กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
+        });
 
-            // With no-cors mode, we can't read the response
-            // But the request will still go through
-            // Show success state
-            dom.submitBtn.classList.remove('loading');
-            dom.submitBtn.classList.add('success');
+        // 2. Immediate UI response (No waiting!)
+        dom.submitBtn.classList.add('success');
 
-            // Haptic feedback on mobile
-            if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+        // Haptic feedback on mobile
+        if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
 
-            // Add to history
-            addToHistory(clipLink, shopLink, state.selectedSheet);
+        // Add to history instantly
+        addToHistory(clipLink, shopLink, state.selectedSheet);
 
-            // Clear inputs
-            dom.clipLink.value = '';
-            dom.shopLink.value = '';
+        // Clear inputs instantly
+        dom.clipLink.value = '';
+        dom.shopLink.value = '';
 
-            // Blur active input to hide keyboard on mobile
-            if (document.activeElement) document.activeElement.blur();
+        // Blur active input to hide keyboard on mobile
+        if (document.activeElement) document.activeElement.blur();
 
-            showToast(`บันทึกลง "${state.selectedSheet}" สำเร็จ!`, 'success');
+        showToast('บันทึกประวัติแล้ว กำลังส่งไป Google Sheets...', 'success');
 
-            // Reset button after delay
-            setTimeout(() => {
-                dom.submitBtn.classList.remove('success');
-                updateSubmitButton();
-            }, 2000);
-
-        } catch (error) {
-            dom.submitBtn.classList.remove('loading');
-            showToast('เกิดข้อผิดพลาด: ' + error.message, 'error');
-            updateSubmitButton();
-        } finally {
+        // Reset button state after 1 second so they can quickly submit the next one
+        setTimeout(() => {
+            dom.submitBtn.classList.remove('success');
             state.isSubmitting = false;
-        }
+            updateSubmitButton();
+        }, 1000);
     }
 
     // --- History Management ---
