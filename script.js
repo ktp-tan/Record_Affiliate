@@ -6,8 +6,10 @@
     'use strict';
 
     // --- State ---
+    const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyGVMrV_s00TIPZP9HflhLv6sxLbZcc-PUkRksYLhgE-ak2d1wPDPBi0Wc-zgKmS9GjvA/exec';
+
     const state = {
-        scriptUrl: localStorage.getItem('appsScriptUrl') || '',
+        scriptUrl: localStorage.getItem('appsScriptUrl') || DEFAULT_SCRIPT_URL,
         selectedSheet: 'Main Sheet',
         isSubmitting: false,
         history: JSON.parse(localStorage.getItem('submitHistory') || '[]'),
