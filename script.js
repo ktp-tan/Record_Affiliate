@@ -23,7 +23,6 @@
         scriptUrlInput: document.getElementById('scriptUrl'),
         saveUrlBtn: document.getElementById('saveUrlBtn'),
         connectionStatus: document.getElementById('connectionStatus'),
-        sheetTabs: document.getElementById('sheetTabs'),
         clipLink: document.getElementById('clipLink'),
         shopLink: document.getElementById('shopLink'),
         submitBtn: document.getElementById('submitBtn'),
@@ -82,16 +81,6 @@
         dom.saveUrlBtn.addEventListener('click', saveScriptUrl);
         dom.scriptUrlInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') saveScriptUrl();
-        });
-
-        // Sheet tabs
-        dom.sheetTabs.addEventListener('click', (e) => {
-            const tab = e.target.closest('.sheet-tab');
-            if (!tab) return;
-
-            document.querySelectorAll('.sheet-tab').forEach((t) => t.classList.remove('active'));
-            tab.classList.add('active');
-            state.selectedSheet = tab.dataset.sheet;
         });
 
         // Paste buttons
