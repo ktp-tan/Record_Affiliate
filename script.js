@@ -381,14 +381,14 @@
                 const beforeUrl = text.split(url)[0].trim();
                 if (beforeUrl) {
                     name = beforeUrl
-                        .replace(/ซื้อได้ในแอป Shopee ตอนนี้เลย!/g, "")
                         .replace(/ลองดู/g, "")
                         .replace(/ลดราคา/g, "")
+                        .split(' ในราคา')[0] // ตัดส่วนราคาและคำโปรโมทท้ายสุดออก
                         .trim();
                 }
             }
             
-            return { url, name: name.substring(0, 80) }; // limit length
+            return { url, name: name.substring(0, 100) }; // limit length
         }
         return null;
     }
