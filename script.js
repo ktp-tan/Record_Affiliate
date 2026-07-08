@@ -25,6 +25,7 @@
         connectionStatus: document.getElementById('connectionStatus'),
         clipLink: document.getElementById('clipLink'),
         shopLink: document.getElementById('shopLink'),
+        prodName: document.getElementById('prodName'),
         submitBtn: document.getElementById('submitBtn'),
         historyList: document.getElementById('historyList'),
         clearHistoryBtn: document.getElementById('clearHistoryBtn'),
@@ -121,6 +122,20 @@
         dom.clipLink.addEventListener('input', updateSubmitButton);
         dom.shopLink.addEventListener('input', updateSubmitButton);
 
+        // Auto-extract name when link is pasted/typed with additional text (Shopee App format)
+        dom.shopLink.addEventListener('input', () => {
+            const val = dom.shopLink.value;
+            if (val && (val.includes(' ') || val.includes('[') || val.includes('\n'))) {
+                const parsed = parsePastedProductInput(val);
+                if (parsed) {
+                    dom.shopLink.value = parsed.url;
+                    dom.prodName.value = parsed.name;
+                    updateSubmitButton();
+                    showToast('ดึงชื่อสินค้าและลิงก์เรียบร้อย!', 'success');
+                }
+            }
+        });
+
         // Submit
         dom.submitBtn.addEventListener('click', handleSubmit);
 
@@ -205,6 +220,7 @@
 
         const clipLink = dom.clipLink.value.trim();
         const shopLink = dom.shopLink.value.trim();
+        const prodName = dom.prodName.value.trim();
 
         if (!clipLink || !shopLink) {
             showToast('กรุณากรอกลิงก์ให้ครบทั้ง 2 ช่อง', 'error');
@@ -230,6 +246,7 @@
             body: JSON.stringify({
                 clipLink: clipLink,
                 shopLink: shopLink,
+                prodName: prodName,
                 sheet: state.selectedSheet,
             }),
         }).catch(error => {
@@ -243,12 +260,13 @@
         // Haptic feedback on mobile
         if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
 
-        // Add to history instantly
-        addToHistory(clipLink, shopLink, state.selectedSheet);
+        // Add to history instantly (displaying product name if available)
+        addToHistory(clipLink, shopLink, state.selectedSheet, prodName);
 
         // Clear inputs instantly
         dom.clipLink.value = '';
         dom.shopLink.value = '';
+        dom.prodName.value = '';
 
         // Blur active input to hide keyboard on mobile
         if (document.activeElement) document.activeElement.blur();
@@ -264,11 +282,12 @@
     }
 
     // --- History Management ---
-    function addToHistory(clipLink, shopLink, sheet) {
+    function addToHistory(clipLink, shopLink, sheet, prodName) {
         const item = {
             clipLink,
             shopLink,
             sheet,
+            prodName: prodName || '',
             timestamp: new Date().toISOString(),
         };
 
@@ -302,6 +321,7 @@
         dom.historyList.innerHTML = state.history
             .map((item) => {
                 const time = formatTime(item.timestamp);
+                const displayTitle = item.prodName ? `🏷️ ${item.prodName}` : item.sheet;
                 return `
                     <div class="history-item">
                         <div class="history-item-icon">
@@ -310,7 +330,7 @@
                             </svg>
                         </div>
                         <div class="history-item-content">
-                            <div class="history-item-sheet">${item.sheet}</div>
+                            <div class="history-item-sheet">${displayTitle}</div>
                             <div class="history-item-links">
                                 <div class="history-item-link"><span>🎬</span> ${truncateUrl(item.clipLink)}</div>
                                 <div class="history-item-link"><span>🛒</span> ${truncateUrl(item.shopLink)}</div>
@@ -344,6 +364,35 @@
     }
 
     // --- Utilities ---
+    function parsePastedProductInput(text) {
+        const urlRegex = /(https?:\/\/[^\s]+)/;
+        const urlMatch = text.match(urlRegex);
+        
+        if (urlMatch) {
+            const url = urlMatch[0];
+            let name = "";
+            
+            // Try to find name in brackets [Product Name]
+            const bracketMatch = text.match(/\[(.*?)\]/);
+            if (bracketMatch) {
+                name = bracketMatch[1];
+            } else {
+                // Otherwise take everything before the URL
+                const beforeUrl = text.split(url)[0].trim();
+                if (beforeUrl) {
+                    name = beforeUrl
+                        .replace(/ซื้อได้ในแอป Shopee ตอนนี้เลย!/g, "")
+                        .replace(/ลองดู/g, "")
+                        .replace(/ลดราคา/g, "")
+                        .trim();
+                }
+            }
+            
+            return { url, name: name.substring(0, 80) }; // limit length
+        }
+        return null;
+    }
+
     function truncateUrl(url) {
         if (url.length > 50) {
             return url.substring(0, 47) + '...';
