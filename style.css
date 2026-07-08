@@ -1163,3 +1163,32 @@ html {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* Keyword Suggestions */
+.keyword-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    min-height: 24px;
+}
+
+.keyword-badge {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.keyword-badge:hover, .keyword-badge:active {
+    background: var(--primary-light);
+    border-color: var(--primary);
+    color: #fff;
+    transform: translateY(-1px);
+}

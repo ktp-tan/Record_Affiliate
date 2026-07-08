@@ -131,6 +131,7 @@
                     dom.shopLink.value = parsed.url;
                     dom.prodName.value = parsed.name;
                     updateSubmitButton();
+                    renderKeywordSuggestions(val); // Generate suggested keyword badges
                     showToast('ดึงชื่อสินค้าและลิงก์เรียบร้อย!', 'success');
                 }
             }
@@ -267,6 +268,8 @@
         dom.clipLink.value = '';
         dom.shopLink.value = '';
         dom.prodName.value = '';
+        const suggestionsContainer = document.getElementById('keywordSuggestions');
+        if (suggestionsContainer) suggestionsContainer.innerHTML = '';
 
         // Blur active input to hide keyboard on mobile
         if (document.activeElement) document.activeElement.blur();
@@ -414,6 +417,52 @@
         return date.toLocaleDateString('th-TH', {
             day: 'numeric',
             month: 'short',
+        });
+    }
+
+    // --- Keyword Suggestions ---
+    function generateKeywordSuggestions(title) {
+        if (!title) return [];
+        
+        // Remove English, numbers, and special characters
+        const cleanTitle = title
+            .replace(/[A-Za-z0-9]/g, ' ')
+            .replace(/[^\u0e00-\u0e7f\s]/g, ' ');
+            
+        const segments = cleanTitle.split(/\s+/).filter(s => s.length >= 2);
+        const junkWords = ['ลองดู', 'ของแท้', 'พร้อมส่ง', 'ลดราคา', 'ราคา', 'ที่', 'ใน', 'แบบ', 'ของ', 'และ', 'หรือ', 'ที่นี่', 'เลย'];
+        const keywords = [];
+        const seen = new Set();
+        
+        for (const seg of segments) {
+            if (seg.length >= 3 && !junkWords.includes(seg) && !seen.has(seg)) {
+                keywords.push(seg);
+                seen.add(seg);
+            }
+        }
+        
+        return keywords.slice(0, 5); // Return up to 5 suggested keywords
+    }
+
+    function renderKeywordSuggestions(title) {
+        const container = document.getElementById('keywordSuggestions');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        const keywords = generateKeywordSuggestions(title);
+        
+        if (keywords.length === 0) return;
+        
+        keywords.forEach(kw => {
+            const badge = document.createElement('div');
+            badge.className = 'keyword-badge';
+            badge.textContent = kw;
+            badge.addEventListener('click', () => {
+                dom.prodName.value = kw;
+                updateSubmitButton();
+                if (navigator.vibrate) navigator.vibrate(20); // Small haptic tap
+            });
+            container.appendChild(badge);
         });
     }
 
