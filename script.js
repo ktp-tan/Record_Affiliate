@@ -495,6 +495,11 @@
     function fetchNameFromBackend(url) {
         if (!state.scriptUrl) return;
         
+        let cleanUrl = url.trim();
+        if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+            cleanUrl = 'https://' + cleanUrl;
+        }
+
         // Show loading state
         dom.prodName.value = '';
         dom.prodName.placeholder = '⏳ กำลังดึงชื่อสินค้าอัตโนมัติ...';
@@ -504,7 +509,7 @@
         if (fetchTimeout) clearTimeout(fetchTimeout);
         
         fetchTimeout = setTimeout(() => {
-            const fetchUrl = `${state.scriptUrl}?action=extractName&url=${encodeURIComponent(url)}`;
+            const fetchUrl = `${state.scriptUrl}?action=extractName&url=${encodeURIComponent(cleanUrl)}`;
             fetch(fetchUrl)
                 .then(res => res.json())
                 .then(data => {
@@ -530,12 +535,9 @@
 
     function isValidProductUrl(str) {
         if (!str) return false;
-        try {
-            const url = new URL(str);
-            return url.hostname.includes('shopee') || url.hostname.includes('shope.ee') || url.hostname.includes('lazada');
-        } catch (_) {
-            return false;
-        }
+        const s = str.trim().toLowerCase();
+        const hasDomain = s.includes('shopee.co.th') || s.includes('shope.ee') || s.includes('lazada.co.th') || s.includes('s.lazada.co.th');
+        return hasDomain && (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('www.') || s.indexOf('/') !== -1);
     }
 
     // --- Start ---
