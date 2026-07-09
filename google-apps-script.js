@@ -200,36 +200,39 @@ function doPost(e) {
     var data = JSON.parse(e.postData.contents);
     var clipLink = data.clipLink;
     var shopLink = data.shopLink;
+    var isHandTools = data.handTools === true;
     
     // ดึงชื่อสินค้า: ใช้จากที่หน้าเว็บส่งมาให้ก่อน ถ้าไม่มีค่อยแกะจากลิงก์
     var productName = data.prodName || extractProductName(shopLink);
     
     var ss = getSpreadsheet();
     
-    // 1. บันทึกลง Main Sheet
+    // 1. บันทึกลง Main Sheet (ทุกกรณี)
     var sheetMain = ss.getSheetByName("Main Sheet");
     if (sheetMain) {
       var lastRowInMain = getLastRowOfColA(sheetMain);
       var newRowMain = lastRowInMain + 1;
       sheetMain.getRange(newRowMain, 1).setValue(clipLink);
       sheetMain.getRange(newRowMain, 2).setValue(shopLink);
-      sheetMain.getRange(newRowMain, 3).setValue(productName); // คอลัมน์ C ชื่อสินค้า
+      sheetMain.getRange(newRowMain, 3).setValue(productName);
     }
     
-    // 2. บันทึกลง Prem Sheet
-    var sheetPrem = ss.getSheetByName("Prem Sheet");
-    if (sheetPrem) {
-      var lastRowInPrem = getLastRowOfColA(sheetPrem);
-      var newRowPrem = lastRowInPrem + 1;
-      sheetPrem.getRange(newRowPrem, 1).setValue(clipLink);
-      sheetPrem.getRange(newRowPrem, 2).setValue(shopLink);
-      sheetPrem.getRange(newRowPrem, 3).setValue(productName); // คอลัมน์ C ชื่อสินค้า
+    // 2. บันทึกลง Sheet ที่สอง (ขึ้นอยู่กับ toggle)
+    var secondSheetName = isHandTools ? "Hand Tools" : "Prem Sheet";
+    var sheetSecond = ss.getSheetByName(secondSheetName);
+    if (sheetSecond) {
+      var lastRowInSecond = getLastRowOfColA(sheetSecond);
+      var newRowSecond = lastRowInSecond + 1;
+      sheetSecond.getRange(newRowSecond, 1).setValue(clipLink);
+      sheetSecond.getRange(newRowSecond, 2).setValue(shopLink);
+      sheetSecond.getRange(newRowSecond, 3).setValue(productName);
     }
     
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       message: "บันทึกสำเร็จ",
-      productName: productName
+      productName: productName,
+      targetSheet: secondSheetName
     })).setMimeType(ContentService.MimeType.JSON);
     
   } catch (error) {

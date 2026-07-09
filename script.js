@@ -26,6 +26,7 @@
         clipLink: document.getElementById('clipLink'),
         shopLink: document.getElementById('shopLink'),
         prodName: document.getElementById('prodName'),
+        handToolsCheck: document.getElementById('handToolsCheck'),
         submitBtn: document.getElementById('submitBtn'),
         historyList: document.getElementById('historyList'),
         clearHistoryBtn: document.getElementById('clearHistoryBtn'),
@@ -222,6 +223,7 @@
         const clipLink = dom.clipLink.value.trim();
         const shopLink = dom.shopLink.value.trim();
         const prodName = dom.prodName.value.trim();
+        const isHandTools = dom.handToolsCheck.checked;
 
         if (!clipLink || !shopLink) {
             showToast('กรุณากรอกลิงก์ให้ครบทั้ง 2 ช่อง', 'error');
@@ -248,6 +250,7 @@
                 clipLink: clipLink,
                 shopLink: shopLink,
                 prodName: prodName,
+                handTools: isHandTools,
                 sheet: state.selectedSheet,
             }),
         }).catch(error => {
@@ -262,12 +265,14 @@
         if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
 
         // Add to history instantly (displaying product name if available)
-        addToHistory(clipLink, shopLink, state.selectedSheet, prodName);
+        const sheetLabel = isHandTools ? '🔧 Hand Tools' : state.selectedSheet;
+        addToHistory(clipLink, shopLink, sheetLabel, prodName);
 
         // Clear inputs instantly
         dom.clipLink.value = '';
         dom.shopLink.value = '';
         dom.prodName.value = '';
+        dom.handToolsCheck.checked = false;
         const suggestionsContainer = document.getElementById('keywordSuggestions');
         if (suggestionsContainer) suggestionsContainer.innerHTML = '';
 
