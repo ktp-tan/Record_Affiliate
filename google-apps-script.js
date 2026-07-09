@@ -149,8 +149,51 @@ function testAffiliateFetch() {
   Logger.log("--- เริ่มการทดสอบดึงชื่อสินค้า ---");
   Logger.log("ลิงก์ทดสอบ: " + url);
   
-  var name = extractProductName(url);
-  Logger.log("ชื่อสินค้าที่ดึงได้: " + (name ? name : "(ดึงชื่อไม่ได้)"));
+  try {
+    // 1. ลองทำตาม Redirect เพื่อดูปลายทาง
+    var currentUrl = url;
+    var options = {
+      'followRedirects': false,
+      'muteHttpExceptions': true
+    };
+    for (var i = 0; i < 5; i++) {
+      var response = UrlFetchApp.fetch(currentUrl, options);
+      var headers = response.getHeaders();
+      var location = headers['Location'] || headers['location'];
+      if (location) {
+        currentUrl = location;
+        Logger.log("Redirect " + (i+1) + " -> " + currentUrl);
+      } else {
+        break;
+      }
+    }
+    
+    // 2. ลอง fetch แบบ Social Bot
+    Logger.log("กำลังเรียก URL ด้วย Social Bot User-Agent...");
+    var botResponse = UrlFetchApp.fetch(url, {
+      'muteHttpExceptions': true,
+      'followRedirects': true,
+      'headers': {
+        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept': 'text/html'
+      }
+    });
+    
+    Logger.log("HTTP Status Code: " + botResponse.getResponseCode());
+    var html = botResponse.getContentText();
+    Logger.log("ความยาว HTML: " + html.length + " ตัวอักษร");
+    Logger.log("ดู HTML 300 ตัวแรก: " + html.substring(0, 300));
+    
+    // ค้นหา og:title
+    var ogTitleMatch = html.match(/property=["']og:title["']\s+content=["']([^"']+)["']/i) || 
+                       html.match(/content=["']([^"']+)["']\s+property=["']og:title["']/i);
+    Logger.log("พบ og:title Match?: " + (ogTitleMatch ? "พบ -> " + ogTitleMatch[0] : "ไม่พบ"));
+    if (ogTitleMatch) {
+      Logger.log("เนื้อหาใน og:title: " + ogTitleMatch[1]);
+    }
+  } catch (err) {
+    Logger.log("เกิดข้อผิดพลาดในการรัน: " + err.toString());
+  }
 }
 
 // ฟังก์ชันดึง Spreadsheet
