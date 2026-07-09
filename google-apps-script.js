@@ -247,6 +247,22 @@ function doPost(e) {
 // ส่วนที่ 3: doGet
 // ============================================
 function doGet(e) {
+  if (e && e.parameter && e.parameter.action === "extractName") {
+    try {
+      var url = e.parameter.url;
+      var name = extractProductName(url);
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        productName: name
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "error",
+        message: err.toString()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
     message: "Record Affiliate API is running!"

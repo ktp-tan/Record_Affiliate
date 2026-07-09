@@ -27,6 +27,7 @@
         shopLink: document.getElementById('shopLink'),
         prodName: document.getElementById('prodName'),
         handToolsCheck: document.getElementById('handToolsCheck'),
+        handToolsToggle: document.getElementById('handToolsToggle'),
         submitBtn: document.getElementById('submitBtn'),
         historyList: document.getElementById('historyList'),
         clearHistoryBtn: document.getElementById('clearHistoryBtn'),
@@ -123,18 +124,36 @@
         dom.clipLink.addEventListener('input', updateSubmitButton);
         dom.shopLink.addEventListener('input', updateSubmitButton);
 
-        // Auto-extract name when link is pasted/typed with additional text (Shopee App format)
+        // Hand Tools checkbox state change fallback for styling
+        if (dom.handToolsCheck && dom.handToolsToggle) {
+            dom.handToolsCheck.addEventListener('change', () => {
+                if (dom.handToolsCheck.checked) {
+                    dom.handToolsToggle.classList.add('checked');
+                } else {
+                    dom.handToolsToggle.classList.remove('checked');
+                }
+            });
+        }
+
+        // Auto-extract name when link is pasted/typed
         dom.shopLink.addEventListener('input', () => {
-            const val = dom.shopLink.value;
-            if (val && (val.includes(' ') || val.includes('[') || val.includes('\n'))) {
+            const val = dom.shopLink.value.trim();
+            if (!val) return;
+
+            // 1. If it's Shopee/Lazada copy-paste text (containing space/newline/etc. - Shopee App copy)
+            if (val.includes(' ') || val.includes('[') || val.includes('\n')) {
                 const parsed = parsePastedProductInput(val);
                 if (parsed) {
                     dom.shopLink.value = parsed.url;
                     dom.prodName.value = parsed.name;
                     updateSubmitButton();
-                    renderKeywordSuggestions(val); // Generate suggested keyword badges
+                    renderKeywordSuggestions(parsed.name); // Generate suggested keyword badges
                     showToast('ดึงชื่อสินค้าและลิงก์เรียบร้อย!', 'success');
                 }
+            }
+            // 2. If it's a clean Shopee/Lazada URL, fetch from Apps Script backend dynamically
+            else if (isValidProductUrl(val)) {
+                fetchNameFromBackend(val);
             }
         });
 
@@ -469,6 +488,54 @@
             });
             container.appendChild(badge);
         });
+    }
+
+    // --- Dynamic Name Fetching Helpers ---
+    let fetchTimeout = null;
+    function fetchNameFromBackend(url) {
+        if (!state.scriptUrl) return;
+        
+        // Show loading state
+        dom.prodName.value = '';
+        dom.prodName.placeholder = '⏳ กำลังดึงชื่อสินค้าอัตโนมัติ...';
+        dom.prodName.disabled = true;
+
+        // Debounce to prevent multiple API requests
+        if (fetchTimeout) clearTimeout(fetchTimeout);
+        
+        fetchTimeout = setTimeout(() => {
+            const fetchUrl = `${state.scriptUrl}?action=extractName&url=${encodeURIComponent(url)}`;
+            fetch(fetchUrl)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.status === 'success' && data.productName) {
+                        dom.prodName.value = data.productName;
+                        dom.prodName.placeholder = 'ชื่อสินค้า (ดึงให้อัตโนมัติจากลิงก์ที่วาง)';
+                        renderKeywordSuggestions(data.productName);
+                        showToast('ดึงชื่อสินค้าสำเร็จ!', 'success');
+                    } else {
+                        dom.prodName.placeholder = 'ไม่สามารถดึงชื่อสินค้าได้ กรุณาพิมพ์เอง';
+                    }
+                    dom.prodName.disabled = false;
+                    updateSubmitButton();
+                })
+                .catch(err => {
+                    console.error('Fetch name error:', err);
+                    dom.prodName.placeholder = 'ไม่สามารถดึงชื่อสินค้าได้ กรุณาพิมพ์เอง';
+                    dom.prodName.disabled = false;
+                    updateSubmitButton();
+                });
+        }, 600); // 600ms debounce
+    }
+
+    function isValidProductUrl(str) {
+        if (!str) return false;
+        try {
+            const url = new URL(str);
+            return url.hostname.includes('shopee') || url.hostname.includes('shope.ee') || url.hostname.includes('lazada');
+        } catch (_) {
+            return false;
+        }
     }
 
     // --- Start ---

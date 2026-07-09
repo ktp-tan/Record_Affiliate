@@ -1201,14 +1201,23 @@ html {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
-    padding: 12px 16px;
+    padding: 14px 16px;
     margin-bottom: 16px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
     transition: all 0.3s ease;
 }
 
-.toggle-group:has(input:checked) {
-    background: rgba(255, 165, 0, 0.08);
-    border-color: rgba(255, 165, 0, 0.25);
+.toggle-group:active {
+    transform: scale(0.98);
+}
+
+.toggle-group:has(input:checked),
+.toggle-group.checked {
+    background: rgba(255, 165, 0, 0.1);
+    border-color: rgba(255, 165, 0, 0.35);
+    box-shadow: 0 0 15px rgba(255, 165, 0, 0.08);
 }
 
 .toggle-label {
@@ -1218,20 +1227,24 @@ html {
     font-size: 0.9rem;
     color: var(--text-secondary);
     cursor: pointer;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
+    transition: color 0.3s ease;
 }
 
-.toggle-group:has(input:checked) .toggle-label {
+.toggle-group:has(input:checked) .toggle-label,
+.toggle-group.checked .toggle-label {
     color: #ffa500;
+    font-weight: 500;
 }
 
-.toggle-group:has(input:checked) .toggle-label svg {
+.toggle-group:has(input:checked) .toggle-label svg,
+.toggle-group.checked .toggle-label svg {
     stroke: #ffa500;
+    filter: drop-shadow(0 0 4px rgba(255, 165, 0, 0.4));
 }
 
 .toggle-switch {
     position: relative;
+    display: inline-block;
     width: 48px;
     height: 26px;
     flex-shrink: 0;
@@ -1241,16 +1254,16 @@ html {
     opacity: 0;
     width: 0;
     height: 0;
+    position: absolute;
 }
 
 .toggle-slider {
     position: absolute;
     cursor: pointer;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 26px;
     transition: all 0.3s ease;
-    -webkit-tap-highlight-color: transparent;
 }
 
 .toggle-slider::before {
@@ -1260,17 +1273,17 @@ html {
     width: 20px;
     left: 3px;
     bottom: 3px;
-    background: var(--text-muted);
+    background: rgba(255, 255, 255, 0.4);
     border-radius: 50%;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .toggle-switch input:checked + .toggle-slider {
-    background: rgba(255, 165, 0, 0.3);
+    background: rgba(255, 165, 0, 0.35);
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
     transform: translateX(22px);
     background: #ffa500;
-    box-shadow: 0 0 8px rgba(255, 165, 0, 0.4);
+    box-shadow: 0 0 10px rgba(255, 165, 0, 0.5);
 }
