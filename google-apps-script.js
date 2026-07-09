@@ -105,13 +105,14 @@ function extractProductNameViaSocialBot(url) {
     
     var html = response.getContentText();
     
-    // ค้นหา og:title ในผลลัพธ์
-    var ogTitleMatch = html.match(/property="og:title"\s+content="([^"]+)"/i);
+    // ค้นหา og:title ในผลลัพธ์ (รองรับทั้ง single/double quotes และการเรียงลำดับ property/content)
+    var ogTitleMatch = html.match(/property=["']og:title["']\s+content=["']([^"']+)["']/i) || 
+                       html.match(/content=["']([^"']+)["']\s+property=["']og:title["']/i);
+                       
     if (ogTitleMatch) {
       var title = ogTitleMatch[1];
-      // ตัด " | Shopee Thailand" ออก
       title = title.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
-      return title;
+      return decodeHtmlEntities(title);
     }
     
     // ลอง title tag แทน
@@ -120,7 +121,7 @@ function extractProductNameViaSocialBot(url) {
       var title = titleMatch[1];
       title = title.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
       if (title && title !== "Shopee" && title.length > 3) {
-        return title;
+        return decodeHtmlEntities(title);
       }
     }
     
@@ -128,6 +129,28 @@ function extractProductNameViaSocialBot(url) {
   } catch (e) {
     return "";
   }
+}
+
+// ฟังก์ชันแปลง HTML Entities ให้กลับเป็นอักษรปกติ
+function decodeHtmlEntities(str) {
+  if (!str) return "";
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+}
+
+// ฟังก์ชันสำหรับรันทดสอบใน Google Apps Script Editor เพื่อดู Log
+function testAffiliateFetch() {
+  var url = "https://s.shopee.co.th/111CGD5975";
+  Logger.log("--- เริ่มการทดสอบดึงชื่อสินค้า ---");
+  Logger.log("ลิงก์ทดสอบ: " + url);
+  
+  var name = extractProductName(url);
+  Logger.log("ชื่อสินค้าที่ดึงได้: " + (name ? name : "(ดึงชื่อไม่ได้)"));
 }
 
 // ฟังก์ชันดึง Spreadsheet
