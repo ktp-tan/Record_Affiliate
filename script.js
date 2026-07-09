@@ -405,13 +405,42 @@
                 name = bracketMatch[1];
             } else {
                 // Otherwise take everything before the URL
-                const beforeUrl = text.split(url)[0].trim();
+                let beforeUrl = text.split(url)[0].trim();
                 if (beforeUrl) {
-                    name = beforeUrl
-                        .replace(/ลองดู/g, "")
-                        .replace(/ลดราคา/g, "")
-                        .split(' ในราคา')[0] // ตัดส่วนราคาและคำโปรโมทท้ายสุดออก
-                        .trim();
+                    // 1. Remove prefixes
+                    const prefixes = [
+                        /^ลองดู\s*/i,
+                        /^ลองเข้ามาดูสินค้า\s*/i,
+                        /^ช้อปเลย!\s*/i,
+                        /^แนะนำ\s*/i,
+                        /^รีวิว\s*/i,
+                        /^พิกัด\s*/i
+                    ];
+                    for (const pref of prefixes) {
+                        beforeUrl = beforeUrl.replace(pref, "");
+                    }
+
+                    // 2. Cut off at suffixes
+                    const suffixes = [
+                        ' ในราคา',
+                        ' ลดราคา',
+                        ' เหลือ ',
+                        ' ซื้อได้ในแอป',
+                        ' ที่ Shopee',
+                        ' ที่ Lazada',
+                        ' ช้อปเลย',
+                        ' สนใจสั่งซื้อ',
+                        ' พิกัด'
+                    ];
+                    
+                    let cleanName = beforeUrl;
+                    for (const suff of suffixes) {
+                        if (cleanName.includes(suff)) {
+                            cleanName = cleanName.split(suff)[0];
+                        }
+                    }
+                    
+                    name = cleanName.trim();
                 }
             }
             
