@@ -37,16 +37,16 @@ function extractProductName(url) {
     var currentUrl = url.trim();
     
     // กรองเฉพาะ Shopee หรือ Lazada
-    if (currentUrl.indexOf("shopee") === -1 && currentUrl.indexOf("lazada") === -1 && currentUrl.indexOf("shope.ee") === -1) {
-      return "";
-    }
+    var isShopee = currentUrl.indexOf("shopee") !== -1 || currentUrl.indexOf("shope.ee") !== -1;
+    var isLazada = currentUrl.indexOf("lazada") !== -1;
+    if (!isShopee && !isLazada) return "";
     
+    // === วิธีที่ 1: ติดตาม Redirect แล้วแกะชื่อจาก URL ยาว ===
     var options = {
       'followRedirects': false,
       'muteHttpExceptions': true
     };
     
-    // วนลูปติดตาม Redirect (กรณีเป็นลิงก์ย่อ เช่น s.shopee.co.th / s.lazada.co.th) เพื่อดึงลิงก์ยาว
     for (var i = 0; i < 5; i++) {
       var response = UrlFetchApp.fetch(currentUrl, options);
       var headers = response.getHeaders();
@@ -58,17 +58,16 @@ function extractProductName(url) {
       }
     }
     
-    // แปลงรหัสอักขระ URL ให้กลับเป็นภาษาไทย
     var decodedUrl = decodeURIComponent(currentUrl);
     var productName = "";
     
-    // 1. กรณีเป็น Shopee (ดึงชื่อก่อนคำว่า -i.)
+    // Shopee ลิงก์ยาว (มี -i. ในชื่อ)
     if (decodedUrl.indexOf("-i.") !== -1) {
       var parts = decodedUrl.split("/");
       var lastSegment = parts[parts.length - 1]; 
       productName = lastSegment.split("-i.")[0];
     } 
-    // 2. กรณีเป็น Lazada (ดึงชื่อก่อนคำว่า -i)
+    // Lazada (มี /products/)
     else if (decodedUrl.indexOf("/products/") !== -1) {
       var parts = decodedUrl.split("/");
       var lastSegment = parts[parts.length - 1];
@@ -76,8 +75,53 @@ function extractProductName(url) {
     }
     
     if (productName) {
-      // เปลี่ยนเครื่องหมายขีดกลาง (-) ให้เป็นเว้นวรรค
       return productName.replace(/-/g, " ").trim();
+    }
+    
+    // === วิธีที่ 2 (Fallback สำหรับลิงก์สั้น Shopee): ===
+    // ใช้ Facebookbot User-Agent เพื่อดึง og:title
+    // เพราะ Shopee จะส่ง HTML พร้อมชื่อสินค้าให้ social media bots!
+    if (isShopee) {
+      return extractProductNameViaSocialBot(url.trim());
+    }
+    
+    return "";
+  } catch (e) {
+    return "";
+  }
+}
+
+// ฟังก์ชันดึงชื่อสินค้าผ่าน Social Bot User-Agent (Facebook/WhatsApp)
+function extractProductNameViaSocialBot(url) {
+  try {
+    var response = UrlFetchApp.fetch(url, {
+      'muteHttpExceptions': true,
+      'followRedirects': true,
+      'headers': {
+        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'Accept': 'text/html'
+      }
+    });
+    
+    var html = response.getContentText();
+    
+    // ค้นหา og:title ในผลลัพธ์
+    var ogTitleMatch = html.match(/property="og:title"\s+content="([^"]+)"/i);
+    if (ogTitleMatch) {
+      var title = ogTitleMatch[1];
+      // ตัด " | Shopee Thailand" ออก
+      title = title.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
+      return title;
+    }
+    
+    // ลอง title tag แทน
+    var titleMatch = html.match(/<title>(.*?)<\/title>/i);
+    if (titleMatch) {
+      var title = titleMatch[1];
+      title = title.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
+      if (title && title !== "Shopee" && title.length > 3) {
+        return title;
+      }
     }
     
     return "";
