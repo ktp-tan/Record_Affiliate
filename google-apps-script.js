@@ -232,19 +232,6 @@ function setup() {
   }
 }
 
-// ฟังก์ชันค้นหาแถวที่มีค่าที่ระบุในคอลัมน์ A ของชีตปลายทาง
-function findRowByValue(sheet, value) {
-  if (!value) return -1;
-  var values = sheet.getRange("A:A").getValues();
-  for (var i = 0; i < values.length; i++) {
-    var cellVal = values[i][0];
-    if (cellVal && cellVal.toString().trim() === value) {
-      return i + 1; // คืนค่าแถว (1-indexed)
-    }
-  }
-  return -1;
-}
-
 // ============================================
 // ส่วนที่ 1: onEdit (สำหรับการพิมพ์แก้ไขข้อมูลในตารางตรงๆ)
 // ============================================
@@ -252,74 +239,83 @@ function onEdit(e) {
   var range = e.range;
   var sheet = range.getSheet();
   
-  if (sheet.getName() === "Main Sheet") {
-    var startRow = range.getRow();
-    var endRow = range.getLastRow();
-    
-    // ข้ามแถวหัวตาราง (แถวที่ 1)
-    if (startRow < 2) startRow = 2;
-    if (endRow < 2) return;
-    
-    // ตรวจสอบว่ามีคอลัมน์ที่ถูกแก้ไขอยู่ในกลุ่ม A (1), B (2) หรือ C (3) หรือไม่
-    var startCol = range.getColumn();
-    var endCol = range.getLastColumn();
-    var isTargetColumn = (startCol <= 3 && endCol >= 1);
-    
-    if (!isTargetColumn) return;
-    
-    var ss = getSpreadsheet();
-    var sheetPrem = ss.getSheetByName("Prem Sheet");
-    var sheetHand = ss.getSheetByName("Hand Tools");
-    
-    // วนลูปอัปเดตข้อมูลทุกแถวที่ถูกแก้ไข (รองรับทั้งการพิมพ์ทีละเซลล์ และการ Copy-Paste ทีละหลายแถว)
-    for (var row = startRow; row <= endRow; row++) {
-      var tiktokVal = sheet.getRange(row, 1).getValue();
-      var shopeeVal = sheet.getRange(row, 2).getValue();
-      var productVal = sheet.getRange(row, 3).getValue();
-      
-      var tiktokLink = tiktokVal ? tiktokVal.toString().trim() : "";
-      var shopeeLink = shopeeVal ? shopeeVal.toString().trim() : "";
-      var productName = productVal ? productVal.toString().trim() : "";
-      
-      // ลิงก์ TikTok คีย์หลักต้องไม่ว่างเปล่า
-      if (!tiktokLink) continue;
-      
-      var foundSheet = null;
-      var foundRow = -1;
-      
-      // 1. ค้นหาใน Prem Sheet ก่อน
-      if (sheetPrem) {
-        var rowPrem = findRowByValue(sheetPrem, tiktokLink);
-        if (rowPrem !== -1) {
-          foundSheet = sheetPrem;
-          foundRow = rowPrem;
-        }
-      }
-      
-      // 2. ถ้าไม่เจอ ค้นหาใน Hand Tools
-      if (foundRow === -1 && sheetHand) {
-        var rowHand = findRowByValue(sheetHand, tiktokLink);
-        if (rowHand !== -1) {
-          foundSheet = sheetHand;
-          foundRow = rowHand;
-        }
-      }
-      
-      // 3. จัดการเขียนข้อมูล
-      if (foundSheet && foundRow !== -1) {
-        // หากเจอแถวเดิมในชีตปลายทางแล้ว -> อัปเดตข้อมูลทับแถวเดิม (ไม่สร้างแถวซ้ำ)
-        foundSheet.getRange(foundRow, 1).setValue(tiktokLink);
-        foundSheet.getRange(foundRow, 2).setValue(shopeeLink);
-        foundSheet.getRange(foundRow, 3).setValue(productName);
-      } else if (sheetPrem) {
-        // หากไม่เจอข้อมูลเดิมเลย -> เพิ่มแถวใหม่ลงใน Prem Sheet (เป็นชีต Default)
-        var nextRow = getLastRowOfColA(sheetPrem) + 1;
-        sheetPrem.getRange(nextRow, 1).setValue(tiktokLink);
-        sheetPrem.getRange(nextRow, 2).setValue(shopeeLink);
-        sheetPrem.getRange(nextRow, 3).setValue(productName);
-      }
+  // ตรวจสอบว่าแก้ไขในหน้า "Main Sheet" เสมอ
+  if (sheet.getName() !== "Main Sheet") return;
+  
+  var startRow = range.getRow();
+  var numRows = range.getNumRows();
+  
+  // ข้ามแถวหัวตาราง (แถวที่ 1)
+  if (startRow === 1) {
+    if (numRows > 1) {
+      startRow = 2;
+      numRows--;
+    } else {
+      return;
     }
   }
+  
+  var ss = getSpreadsheet();
+  var sheetPrem = ss.getSheetByName("Prem Sheet");
+  var sheetHand = ss.getSheetByName("Hand Tools");
+  if (!sheetPrem) return;
+  
+  // วนลูปประมวลผลทุกแถวที่มีการแก้ไข (รองรับการแก้ไข/วางข้อมูลหลายแถวพร้อมกัน)
+  for (var r = 0; r < numRows; r++) {
+    var currentRow = startRow + r;
+    
+    var tiktokLink = sheet.getRange(currentRow, 1).getValue().toString().trim();
+    var shopLink = sheet.getRange(currentRow, 2).getValue().toString().trim();
+    var productName = sheet.getRange(currentRow, 3).getValue().toString().trim();
+    
+    // ถ้าว่างหมดทั้ง TikTok Link และ Shopee Link ให้ข้ามไป
+    if (!tiktokLink && !shopLink) continue;
+    
+    // 1. ค้นหาความซ้ำใน Prem Sheet ก่อนเพื่ออัปเดตแถวเดิม
+    var premRow = findRowByLink(sheetPrem, tiktokLink, shopLink);
+    if (premRow !== -1) {
+      if (tiktokLink) sheetPrem.getRange(premRow, 1).setValue(tiktokLink);
+      if (shopLink) sheetPrem.getRange(premRow, 2).setValue(shopLink);
+      // อัปเดตชื่อสินค้า แม้ว่าชื่อสินค้าที่ได้มาจะเป็นค่าว่าง (เคลียร์ช่อง)
+      sheetPrem.getRange(premRow, 3).setValue(productName);
+      continue;
+    }
+    
+    // 2. ถ้าไม่พบใน Prem Sheet ให้ค้นหาใน Hand Tools เผื่อว่าข้อมูลถูกจับคู่อยู่ที่นั่น
+    if (sheetHand) {
+      var handRow = findRowByLink(sheetHand, tiktokLink, shopLink);
+      if (handRow !== -1) {
+        if (tiktokLink) sheetHand.getRange(handRow, 1).setValue(tiktokLink);
+        if (shopLink) sheetHand.getRange(handRow, 2).setValue(shopLink);
+        sheetHand.getRange(handRow, 3).setValue(productName);
+        continue;
+      }
+    }
+    
+    // 3. หากไม่พบลิงก์นี้ในหน้าใดเลย ให้เพิ่มเป็นแถวใหม่ (โดยดีฟอลต์จะเขียนเข้า Prem Sheet)
+    var nextRow = getLastRowOfColA(sheetPrem) + 1;
+    sheetPrem.getRange(nextRow, 1).setValue(tiktokLink);
+    sheetPrem.getRange(nextRow, 2).setValue(shopLink);
+    sheetPrem.getRange(nextRow, 3).setValue(productName);
+  }
+}
+
+// ฟังก์ชันย่อยสำหรับค้นหาแถวจากลิงก์
+function findRowByLink(targetSheet, tiktokLink, shopLink) {
+  if (!tiktokLink && !shopLink) return -1;
+  var values = targetSheet.getRange("A:B").getValues();
+  for (var i = 0; i < values.length; i++) {
+    var sheetTiktok = values[i][0] ? values[i][0].toString().trim() : "";
+    var sheetShop = values[i][1] ? values[i][1].toString().trim() : "";
+    
+    if (tiktokLink && sheetTiktok === tiktokLink) {
+      return i + 1; // ส่งคืนแถวแบบ 1-indexed
+    }
+    if (shopLink && sheetShop === shopLink) {
+      return i + 1; // ส่งคืนแถวแบบ 1-indexed
+    }
+  }
+  return -1;
 }
 
 // ============================================
