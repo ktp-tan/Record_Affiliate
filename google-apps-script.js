@@ -232,6 +232,19 @@ function setup() {
   }
 }
 
+// ฟังก์ชันค้นหาแถวที่มีค่าที่ระบุในคอลัมน์ A ของชีตปลายทาง
+function findRowByValue(sheet, value) {
+  if (!value) return -1;
+  var values = sheet.getRange("A:A").getValues();
+  for (var i = 0; i < values.length; i++) {
+    var cellVal = values[i][0];
+    if (cellVal && cellVal.toString().trim() === value) {
+      return i + 1; // คืนค่าแถว (1-indexed)
+    }
+  }
+  return -1;
+}
+
 // ============================================
 // ส่วนที่ 1: onEdit (สำหรับการพิมพ์แก้ไขข้อมูลในตารางตรงๆ)
 // ============================================
@@ -239,21 +252,72 @@ function onEdit(e) {
   var range = e.range;
   var sheet = range.getSheet();
   
-  if (sheet.getName() === "Main Sheet" && range.getRow() > 1 && (range.getColumn() === 1 || range.getColumn() === 2 || range.getColumn() === 3)) {
+  if (sheet.getName() === "Main Sheet") {
+    var startRow = range.getRow();
+    var endRow = range.getLastRow();
+    
+    // ข้ามแถวหัวตาราง (แถวที่ 1)
+    if (startRow < 2) startRow = 2;
+    if (endRow < 2) return;
+    
+    // ตรวจสอบว่ามีคอลัมน์ที่ถูกแก้ไขอยู่ในกลุ่ม A (1), B (2) หรือ C (3) หรือไม่
+    var startCol = range.getColumn();
+    var endCol = range.getLastColumn();
+    var isTargetColumn = (startCol <= 3 && endCol >= 1);
+    
+    if (!isTargetColumn) return;
+    
     var ss = getSpreadsheet();
-    var targetSheet = ss.getSheetByName("Prem Sheet");
-    if (!targetSheet) return;
+    var sheetPrem = ss.getSheetByName("Prem Sheet");
+    var sheetHand = ss.getSheetByName("Hand Tools");
     
-    var row = range.getRow();
-    var tiktokLink = sheet.getRange(row, 1).getValue();
-    var shopeeLink = sheet.getRange(row, 2).getValue();
-    var productName = sheet.getRange(row, 3).getValue();
-    
-    if (tiktokLink || shopeeLink) {
-      var nextRow = targetSheet.getRange("A:A").getValues().filter(String).length + 1;
-      targetSheet.getRange(nextRow, 1).setValue(tiktokLink);
-      targetSheet.getRange(nextRow, 2).setValue(shopeeLink);
-      targetSheet.getRange(nextRow, 3).setValue(productName);
+    // วนลูปอัปเดตข้อมูลทุกแถวที่ถูกแก้ไข (รองรับทั้งการพิมพ์ทีละเซลล์ และการ Copy-Paste ทีละหลายแถว)
+    for (var row = startRow; row <= endRow; row++) {
+      var tiktokVal = sheet.getRange(row, 1).getValue();
+      var shopeeVal = sheet.getRange(row, 2).getValue();
+      var productVal = sheet.getRange(row, 3).getValue();
+      
+      var tiktokLink = tiktokVal ? tiktokVal.toString().trim() : "";
+      var shopeeLink = shopeeVal ? shopeeVal.toString().trim() : "";
+      var productName = productVal ? productVal.toString().trim() : "";
+      
+      // ลิงก์ TikTok คีย์หลักต้องไม่ว่างเปล่า
+      if (!tiktokLink) continue;
+      
+      var foundSheet = null;
+      var foundRow = -1;
+      
+      // 1. ค้นหาใน Prem Sheet ก่อน
+      if (sheetPrem) {
+        var rowPrem = findRowByValue(sheetPrem, tiktokLink);
+        if (rowPrem !== -1) {
+          foundSheet = sheetPrem;
+          foundRow = rowPrem;
+        }
+      }
+      
+      // 2. ถ้าไม่เจอ ค้นหาใน Hand Tools
+      if (foundRow === -1 && sheetHand) {
+        var rowHand = findRowByValue(sheetHand, tiktokLink);
+        if (rowHand !== -1) {
+          foundSheet = sheetHand;
+          foundRow = rowHand;
+        }
+      }
+      
+      // 3. จัดการเขียนข้อมูล
+      if (foundSheet && foundRow !== -1) {
+        // หากเจอแถวเดิมในชีตปลายทางแล้ว -> อัปเดตข้อมูลทับแถวเดิม (ไม่สร้างแถวซ้ำ)
+        foundSheet.getRange(foundRow, 1).setValue(tiktokLink);
+        foundSheet.getRange(foundRow, 2).setValue(shopeeLink);
+        foundSheet.getRange(foundRow, 3).setValue(productName);
+      } else if (sheetPrem) {
+        // หากไม่เจอข้อมูลเดิมเลย -> เพิ่มแถวใหม่ลงใน Prem Sheet (เป็นชีต Default)
+        var nextRow = getLastRowOfColA(sheetPrem) + 1;
+        sheetPrem.getRange(nextRow, 1).setValue(tiktokLink);
+        sheetPrem.getRange(nextRow, 2).setValue(shopeeLink);
+        sheetPrem.getRange(nextRow, 3).setValue(productName);
+      }
     }
   }
 }
