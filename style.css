@@ -1329,16 +1329,32 @@ html {
 
 /* Active/Glow State */
 .btn-type-select.active {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: var(--accent-primary);
     color: #fff;
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.25), inset 0 0 10px rgba(99, 102, 241, 0.1);
     text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
 }
 
-.btn-type-select.active svg {
-    stroke: var(--text-accent);
-    filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.6));
+/* Cookie: Green Glow */
+#btnTypeCookie.active {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: var(--success);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.25), inset 0 0 10px rgba(16, 185, 129, 0.1);
+}
+
+#btnTypeCookie.active svg {
+    stroke: #34d399;
+    filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.6));
+}
+
+/* HighComs: Golden Yellow Glow */
+#btnTypeHighComs.active {
+    background: rgba(245, 158, 11, 0.08);
+    border-color: var(--warning);
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.25), inset 0 0 10px rgba(245, 158, 11, 0.1);
+}
+
+#btnTypeHighComs.active svg {
+    stroke: #fbbf24;
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.6));
 }
 
 .btn-type-select:active {
