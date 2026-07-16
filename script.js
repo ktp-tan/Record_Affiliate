@@ -292,15 +292,14 @@
         // Lock submit to prevent double click
         state.isSubmitting = true;
 
-        // สร้าง URL พร้อม query parameter สำหรับ itemType (เหมือนวิธีที่ handTools ส่งค่า)
-        let fetchUrl = state.scriptUrl;
+        // แนบ itemType เข้าไปใน prodName ด้วยตัวคั่น ||| (วิธีนี้ส่งได้ 100% เพราะ prodName ส่งสำเร็จทุกครั้ง)
+        let finalProdName = prodName;
         if (state.selectedItemType) {
-            const separator = fetchUrl.includes('?') ? '&' : '?';
-            fetchUrl += separator + 'itemType=' + encodeURIComponent(state.selectedItemType);
+            finalProdName = prodName + '|||' + state.selectedItemType;
         }
 
         // 1. Send data to Google Sheets in the background (Non-blocking)
-        fetch(fetchUrl, {
+        fetch(state.scriptUrl, {
             method: 'POST',
             mode: 'no-cors',
             headers: {
@@ -309,9 +308,8 @@
             body: JSON.stringify({
                 clipLink: clipLink,
                 shopLink: shopLink,
-                prodName: prodName,
+                prodName: finalProdName,
                 handTools: isHandTools,
-                itemType: state.selectedItemType,
                 sheet: state.selectedSheet,
             }),
         }).catch(error => {

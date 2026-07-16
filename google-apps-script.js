@@ -328,16 +328,24 @@ function doPost(e) {
     var shopLink = data.shopLink;
     var isHandTools = data.handTools === true;
     
-    // อ่าน itemType จาก URL parameter ก่อน (เหมือนวิธี doGet) ถ้าไม่มีค่อยอ่านจาก body
+    // แยก itemType ออกจาก prodName (หน้าเว็บจะส่งมาในรูปแบบ "ชื่อสินค้า|||Cookie")
+    var rawProdName = data.prodName || "";
+    var productName = "";
     var itemType = "";
-    if (e.parameter && e.parameter.itemType) {
-      itemType = e.parameter.itemType;
-    } else if (data.itemType) {
-      itemType = data.itemType;
-    }
     
-    // ดึงชื่อสินค้า: ใช้จากที่หน้าเว็บส่งมาให้ก่อน ถ้าไม่มีค่อยแกะจากลิงก์
-    var productName = data.prodName || extractProductName(shopLink);
+    if (rawProdName.indexOf("|||") !== -1) {
+      var parts = rawProdName.split("|||");
+      productName = parts[0].trim() || extractProductName(shopLink);
+      itemType = parts[1] ? parts[1].trim() : "";
+    } else {
+      productName = rawProdName || extractProductName(shopLink);
+      // fallback: อ่าน itemType จาก URL parameter หรือ body โดยตรง
+      if (e.parameter && e.parameter.itemType) {
+        itemType = e.parameter.itemType;
+      } else if (data.itemType) {
+        itemType = data.itemType;
+      }
+    }
     
     var ss = getSpreadsheet();
     
