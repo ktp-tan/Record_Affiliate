@@ -11,6 +11,7 @@
     const state = {
         scriptUrl: localStorage.getItem('appsScriptUrl') || DEFAULT_SCRIPT_URL,
         selectedSheet: 'Main Sheet',
+        selectedItemType: '', // Selected type: Cookie, HighComs, or empty
         isSubmitting: false,
         history: JSON.parse(localStorage.getItem('submitHistory') || '[]'),
     };
@@ -28,6 +29,8 @@
         prodName: document.getElementById('prodName'),
         handToolsCheck: document.getElementById('handToolsCheck'),
         handToolsToggle: document.getElementById('handToolsToggle'),
+        btnTypeCookie: document.getElementById('btnTypeCookie'),
+        btnTypeHighComs: document.getElementById('btnTypeHighComs'),
         submitBtn: document.getElementById('submitBtn'),
         historyList: document.getElementById('historyList'),
         clearHistoryBtn: document.getElementById('clearHistoryBtn'),
@@ -134,6 +137,37 @@
                 }
             });
         }
+
+        // Item Type selection buttons (Cookie & HighComs)
+        const typeButtons = [dom.btnTypeCookie, dom.btnTypeHighComs];
+        typeButtons.forEach(btn => {
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    const value = btn.dataset.value;
+                    
+                    // If already selected, toggle it off
+                    if (state.selectedItemType === value) {
+                        state.selectedItemType = '';
+                        btn.classList.remove('active');
+                    } else {
+                        // Select this one, deselect the other
+                        state.selectedItemType = value;
+                        typeButtons.forEach(b => {
+                            if (b) {
+                                if (b === btn) {
+                                    b.classList.add('active');
+                                } else {
+                                    b.classList.remove('active');
+                                }
+                            }
+                        });
+                    }
+                    
+                    // Haptic feedback
+                    if (navigator.vibrate) navigator.vibrate(25);
+                });
+            }
+        });
 
         // Auto-extract name when link is pasted/typed
         dom.shopLink.addEventListener('input', () => {
@@ -270,6 +304,7 @@
                 shopLink: shopLink,
                 prodName: prodName,
                 handTools: isHandTools,
+                itemType: state.selectedItemType,
                 sheet: state.selectedSheet,
             }),
         }).catch(error => {
@@ -292,6 +327,13 @@
         dom.shopLink.value = '';
         dom.prodName.value = '';
         dom.handToolsCheck.checked = false;
+        if (dom.handToolsToggle) dom.handToolsToggle.classList.remove('checked');
+        
+        // Reset item type selection
+        state.selectedItemType = '';
+        if (dom.btnTypeCookie) dom.btnTypeCookie.classList.remove('active');
+        if (dom.btnTypeHighComs) dom.btnTypeHighComs.classList.remove('active');
+        
         const suggestionsContainer = document.getElementById('keywordSuggestions');
         if (suggestionsContainer) suggestionsContainer.innerHTML = '';
 

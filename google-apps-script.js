@@ -327,6 +327,7 @@ function doPost(e) {
     var clipLink = data.clipLink;
     var shopLink = data.shopLink;
     var isHandTools = data.handTools === true;
+    var itemType = data.itemType || "";
     
     // ดึงชื่อสินค้า: ใช้จากที่หน้าเว็บส่งมาให้ก่อน ถ้าไม่มีค่อยแกะจากลิงก์
     var productName = data.prodName || extractProductName(shopLink);
@@ -341,6 +342,7 @@ function doPost(e) {
       sheetMain.getRange(newRowMain, 1).setValue(clipLink);
       sheetMain.getRange(newRowMain, 2).setValue(shopLink);
       sheetMain.getRange(newRowMain, 3).setValue(productName);
+      sheetMain.getRange(newRowMain, 4).setValue(itemType); // คอลัมน์ D: Type of Item
     }
     
     // 2. บันทึกลง Sheet ที่สอง (ขึ้นอยู่กับ toggle)
@@ -352,6 +354,7 @@ function doPost(e) {
       sheetSecond.getRange(newRowSecond, 1).setValue(clipLink);
       sheetSecond.getRange(newRowSecond, 2).setValue(shopLink);
       sheetSecond.getRange(newRowSecond, 3).setValue(productName);
+      sheetSecond.getRange(newRowSecond, 4).setValue(itemType); // คอลัมน์ D: Type of Item
     }
     
     return ContentService.createTextOutput(JSON.stringify({
