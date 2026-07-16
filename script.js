@@ -165,9 +165,6 @@
                     
                     // Haptic feedback
                     if (navigator.vibrate) navigator.vibrate(25);
-                    
-                    // Debug: show toast to confirm button click on mobile
-                    showToast('เลือกประเภท: ' + (state.selectedItemType || '(ยกเลิกเลือก)'), 'success');
                 });
             }
         });
@@ -295,26 +292,28 @@
         // Lock submit to prevent double click
         state.isSubmitting = true;
 
+        // สร้าง URL พร้อม query parameter สำหรับ itemType (เหมือนวิธีที่ handTools ส่งค่า)
+        let fetchUrl = state.scriptUrl;
+        if (state.selectedItemType) {
+            const separator = fetchUrl.includes('?') ? '&' : '?';
+            fetchUrl += separator + 'itemType=' + encodeURIComponent(state.selectedItemType);
+        }
+
         // 1. Send data to Google Sheets in the background (Non-blocking)
-        const postBody = JSON.stringify({
-            clipLink: clipLink,
-            shopLink: shopLink,
-            prodName: prodName,
-            handTools: isHandTools,
-            itemType: state.selectedItemType,
-            sheet: state.selectedSheet,
-        });
-
-        // DEBUG: show what's being sent
-        showToast('📤 ส่ง: ' + postBody.substring(postBody.indexOf('itemType'), postBody.indexOf('itemType') + 30), 'success');
-
-        fetch(state.scriptUrl, {
+        fetch(fetchUrl, {
             method: 'POST',
             mode: 'no-cors',
             headers: {
                 'Content-Type': 'text/plain',
             },
-            body: postBody,
+            body: JSON.stringify({
+                clipLink: clipLink,
+                shopLink: shopLink,
+                prodName: prodName,
+                handTools: isHandTools,
+                itemType: state.selectedItemType,
+                sheet: state.selectedSheet,
+            }),
         }).catch(error => {
             console.error('Background send error:', error);
             showToast('ส่งข้อมูลล้มเหลว กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
@@ -330,9 +329,7 @@
         const sheetLabel = isHandTools ? '🔧 Hand Tools' : state.selectedSheet;
         addToHistory(clipLink, shopLink, sheetLabel, prodName);
 
-        // DEBUG: capture itemType value before reset
-        const sentItemType = state.selectedItemType;
-        showToast('บันทึกแล้ว | ประเภท: [' + (sentItemType || 'ไม่ได้เลือก') + '] กำลังส่งไป Google Sheets...', 'success');
+        showToast('บันทึกประวัติแล้ว กำลังส่งไป Google Sheets...', 'success');
 
         // Clear inputs instantly
         dom.clipLink.value = '';

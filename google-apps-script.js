@@ -327,7 +327,14 @@ function doPost(e) {
     var clipLink = data.clipLink;
     var shopLink = data.shopLink;
     var isHandTools = data.handTools === true;
-    var itemType = data.itemType || "";
+    
+    // อ่าน itemType จาก URL parameter ก่อน (เหมือนวิธี doGet) ถ้าไม่มีค่อยอ่านจาก body
+    var itemType = "";
+    if (e.parameter && e.parameter.itemType) {
+      itemType = e.parameter.itemType;
+    } else if (data.itemType) {
+      itemType = data.itemType;
+    }
     
     // ดึงชื่อสินค้า: ใช้จากที่หน้าเว็บส่งมาให้ก่อน ถ้าไม่มีค่อยแกะจากลิงก์
     var productName = data.prodName || extractProductName(shopLink);
