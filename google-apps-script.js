@@ -245,6 +245,11 @@ function onEdit(e) {
   var startRow = range.getRow();
   var numRows = range.getNumRows();
   
+  // ข้ามหากเป็นการแก้ไขคอลัมน์อื่นที่ไม่ใช่ A, B, C, D (เช่น การติ๊ก Checkbox ในคอลัมน์ E, F)
+  // เพื่อป้องกันไม่ให้แถวที่ลบไปจาก Prem Sheet เด้งกลับมาเมื่อมีการคลิกติ๊กถูกใน Main Sheet
+  var startCol = range.getColumn();
+  if (startCol > 4) return;
+  
   // ข้ามแถวหัวตาราง (แถวที่ 1)
   if (startRow === 1) {
     if (numRows > 1) {
@@ -307,30 +312,17 @@ function onEdit(e) {
 function findRowByLink(targetSheet, tiktokLink, shopLink) {
   if (!tiktokLink && !shopLink) return -1;
   var values = targetSheet.getRange("A:B").getValues();
-  
-  // 1. ถ้ามี tiktokLink ให้ค้นหาด้วย tiktokLink ก่อนเป็นอันดับแรก (เพราะเป็นค่าที่ไม่ซ้ำแน่นอน)
-  if (tiktokLink) {
-    for (var i = 0; i < values.length; i++) {
-      var sheetTiktok = values[i][0] ? values[i][0].toString().trim() : "";
-      if (sheetTiktok === tiktokLink) {
-        return i + 1; // ส่งคืนแถวแบบ 1-indexed
-      }
+  for (var i = 0; i < values.length; i++) {
+    var sheetTiktok = values[i][0] ? values[i][0].toString().trim() : "";
+    var sheetShop = values[i][1] ? values[i][1].toString().trim() : "";
+    
+    if (tiktokLink && sheetTiktok === tiktokLink) {
+      return i + 1; // ส่งคืนแถวแบบ 1-indexed
+    }
+    if (shopLink && sheetShop === shopLink) {
+      return i + 1; // ส่งคืนแถวแบบ 1-indexed
     }
   }
-  
-  // 2. ถ้าไม่มี tiktokLink หรือค้นหาด้วย tiktokLink ไม่พบ 
-  // ให้ค้นหาด้วย shopLink แต่ต้องหาแถวที่ช่อง tiktokLink ในชีตเป้าหมายยังเป็นค่าว่างอยู่ด้วย
-  // (เพื่อป้องกันการไปเขียนทับแถวของคลิปอื่นที่ใช้ลิงก์สินค้าซ้ำกัน)
-  if (shopLink) {
-    for (var i = 0; i < values.length; i++) {
-      var sheetTiktok = values[i][0] ? values[i][0].toString().trim() : "";
-      var sheetShop = values[i][1] ? values[i][1].toString().trim() : "";
-      if (sheetShop === shopLink && sheetTiktok === "") {
-        return i + 1; // ส่งคืนแถวแบบ 1-indexed
-      }
-    }
-  }
-  
   return -1;
 }
 
