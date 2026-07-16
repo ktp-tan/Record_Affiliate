@@ -1329,32 +1329,32 @@ html {
 
 /* Active/Glow State */
 .btn-type-select.active {
-    color: #fff;
+    color: #fff !important;
     text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
 }
 
 /* Cookie: Green Glow */
 #btnTypeCookie.active {
-    background: rgba(16, 185, 129, 0.08);
-    border-color: var(--success);
-    box-shadow: 0 0 15px rgba(16, 185, 129, 0.25), inset 0 0 10px rgba(16, 185, 129, 0.1);
+    background: rgba(16, 185, 129, 0.08) !important;
+    border-color: var(--success) !important;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.25), inset 0 0 10px rgba(16, 185, 129, 0.1) !important;
 }
 
 #btnTypeCookie.active svg {
-    stroke: #34d399;
-    filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.6));
+    stroke: #34d399 !important;
+    filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.6)) !important;
 }
 
 /* HighComs: Golden Yellow Glow */
 #btnTypeHighComs.active {
-    background: rgba(245, 158, 11, 0.08);
-    border-color: var(--warning);
-    box-shadow: 0 0 15px rgba(245, 158, 11, 0.25), inset 0 0 10px rgba(245, 158, 11, 0.1);
+    background: rgba(245, 158, 11, 0.08) !important;
+    border-color: var(--warning) !important;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.25), inset 0 0 10px rgba(245, 158, 11, 0.1) !important;
 }
 
 #btnTypeHighComs.active svg {
-    stroke: #fbbf24;
-    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.6));
+    stroke: #fbbf24 !important;
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.6)) !important;
 }
 
 .btn-type-select:active {
