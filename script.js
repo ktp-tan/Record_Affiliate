@@ -296,20 +296,25 @@
         state.isSubmitting = true;
 
         // 1. Send data to Google Sheets in the background (Non-blocking)
+        const postBody = JSON.stringify({
+            clipLink: clipLink,
+            shopLink: shopLink,
+            prodName: prodName,
+            handTools: isHandTools,
+            itemType: state.selectedItemType,
+            sheet: state.selectedSheet,
+        });
+
+        // DEBUG: show what's being sent
+        showToast('📤 ส่ง: ' + postBody.substring(postBody.indexOf('itemType'), postBody.indexOf('itemType') + 30), 'success');
+
         fetch(state.scriptUrl, {
             method: 'POST',
             mode: 'no-cors',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'text/plain',
             },
-            body: JSON.stringify({
-                clipLink: clipLink,
-                shopLink: shopLink,
-                prodName: prodName,
-                handTools: isHandTools,
-                itemType: state.selectedItemType,
-                sheet: state.selectedSheet,
-            }),
+            body: postBody,
         }).catch(error => {
             console.error('Background send error:', error);
             showToast('ส่งข้อมูลล้มเหลว กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
