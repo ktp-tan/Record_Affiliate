@@ -307,17 +307,30 @@ function onEdit(e) {
 function findRowByLink(targetSheet, tiktokLink, shopLink) {
   if (!tiktokLink && !shopLink) return -1;
   var values = targetSheet.getRange("A:B").getValues();
-  for (var i = 0; i < values.length; i++) {
-    var sheetTiktok = values[i][0] ? values[i][0].toString().trim() : "";
-    var sheetShop = values[i][1] ? values[i][1].toString().trim() : "";
-    
-    if (tiktokLink && sheetTiktok === tiktokLink) {
-      return i + 1; // ส่งคืนแถวแบบ 1-indexed
-    }
-    if (shopLink && sheetShop === shopLink) {
-      return i + 1; // ส่งคืนแถวแบบ 1-indexed
+  
+  // 1. ถ้ามี tiktokLink ให้ค้นหาด้วย tiktokLink ก่อนเป็นอันดับแรก (เพราะเป็นค่าที่ไม่ซ้ำแน่นอน)
+  if (tiktokLink) {
+    for (var i = 0; i < values.length; i++) {
+      var sheetTiktok = values[i][0] ? values[i][0].toString().trim() : "";
+      if (sheetTiktok === tiktokLink) {
+        return i + 1; // ส่งคืนแถวแบบ 1-indexed
+      }
     }
   }
+  
+  // 2. ถ้าไม่มี tiktokLink หรือค้นหาด้วย tiktokLink ไม่พบ 
+  // ให้ค้นหาด้วย shopLink แต่ต้องหาแถวที่ช่อง tiktokLink ในชีตเป้าหมายยังเป็นค่าว่างอยู่ด้วย
+  // (เพื่อป้องกันการไปเขียนทับแถวของคลิปอื่นที่ใช้ลิงก์สินค้าซ้ำกัน)
+  if (shopLink) {
+    for (var i = 0; i < values.length; i++) {
+      var sheetTiktok = values[i][0] ? values[i][0].toString().trim() : "";
+      var sheetShop = values[i][1] ? values[i][1].toString().trim() : "";
+      if (sheetShop === shopLink && sheetTiktok === "") {
+        return i + 1; // ส่งคืนแถวแบบ 1-indexed
+      }
+    }
+  }
+  
   return -1;
 }
 
@@ -412,6 +425,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.6.0)"
+    message: "Record Affiliate API is running! (v3.7.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
