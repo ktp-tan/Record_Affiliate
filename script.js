@@ -165,6 +165,9 @@
                     
                     // Haptic feedback
                     if (navigator.vibrate) navigator.vibrate(25);
+                    
+                    // Debug: show toast to confirm button click on mobile
+                    showToast('เลือกประเภท: ' + (state.selectedItemType || '(ยกเลิกเลือก)'), 'success');
                 });
             }
         });
@@ -322,6 +325,10 @@
         const sheetLabel = isHandTools ? '🔧 Hand Tools' : state.selectedSheet;
         addToHistory(clipLink, shopLink, sheetLabel, prodName);
 
+        // DEBUG: capture itemType value before reset
+        const sentItemType = state.selectedItemType;
+        showToast('บันทึกแล้ว | ประเภท: [' + (sentItemType || 'ไม่ได้เลือก') + '] กำลังส่งไป Google Sheets...', 'success');
+
         // Clear inputs instantly
         dom.clipLink.value = '';
         dom.shopLink.value = '';
@@ -339,8 +346,6 @@
 
         // Blur active input to hide keyboard on mobile
         if (document.activeElement) document.activeElement.blur();
-
-        showToast('บันทึกประวัติแล้ว กำลังส่งไป Google Sheets...', 'success');
 
         // Reset button state after 1 second so they can quickly submit the next one
         setTimeout(() => {
