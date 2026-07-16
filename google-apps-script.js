@@ -267,6 +267,7 @@ function onEdit(e) {
     var tiktokLink = sheet.getRange(currentRow, 1).getValue().toString().trim();
     var shopLink = sheet.getRange(currentRow, 2).getValue().toString().trim();
     var productName = sheet.getRange(currentRow, 3).getValue().toString().trim();
+    var itemType = sheet.getRange(currentRow, 4).getValue().toString().trim(); // คอลัมน์ D: Type of Item
     
     // ถ้าว่างหมดทั้ง TikTok Link และ Shopee Link ให้ข้ามไป
     if (!tiktokLink && !shopLink) continue;
@@ -276,8 +277,8 @@ function onEdit(e) {
     if (premRow !== -1) {
       if (tiktokLink) sheetPrem.getRange(premRow, 1).setValue(tiktokLink);
       if (shopLink) sheetPrem.getRange(premRow, 2).setValue(shopLink);
-      // อัปเดตชื่อสินค้า แม้ว่าชื่อสินค้าที่ได้มาจะเป็นค่าว่าง (เคลียร์ช่อง)
       sheetPrem.getRange(premRow, 3).setValue(productName);
+      sheetPrem.getRange(premRow, 4).setValue(itemType); // อัปเดต Column D ใน Prem Sheet
       continue;
     }
     
@@ -288,6 +289,7 @@ function onEdit(e) {
         if (tiktokLink) sheetHand.getRange(handRow, 1).setValue(tiktokLink);
         if (shopLink) sheetHand.getRange(handRow, 2).setValue(shopLink);
         sheetHand.getRange(handRow, 3).setValue(productName);
+        sheetHand.getRange(handRow, 4).setValue(itemType); // อัปเดต Column D ใน Hand Tools
         continue;
       }
     }
@@ -297,6 +299,7 @@ function onEdit(e) {
     sheetPrem.getRange(nextRow, 1).setValue(tiktokLink);
     sheetPrem.getRange(nextRow, 2).setValue(shopLink);
     sheetPrem.getRange(nextRow, 3).setValue(productName);
+    sheetPrem.getRange(nextRow, 4).setValue(itemType); // บันทึก Column D ใน Prem Sheet ด้วย
   }
 }
 
@@ -409,6 +412,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.5.0)"
+    message: "Record Affiliate API is running! (v3.6.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
