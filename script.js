@@ -12,6 +12,7 @@
         scriptUrl: localStorage.getItem('appsScriptUrl') || DEFAULT_SCRIPT_URL,
         selectedSheet: 'Main Sheet',
         selectedItemType: '', // Selected type: Cookie, HighComs, or empty
+        isPremSearch: localStorage.getItem('premSearchMode') === 'true', // Prem Search Mode (PS in Column K of Prem Sheet)
         isSubmitting: false,
         history: JSON.parse(localStorage.getItem('submitHistory') || '[]'),
     };
@@ -32,6 +33,7 @@
         btnTypeCookie: document.getElementById('btnTypeCookie'),
         btnTypeHighComs: document.getElementById('btnTypeHighComs'),
         submitBtn: document.getElementById('submitBtn'),
+        btnPsMode: document.getElementById('btnPsMode'),
         historyList: document.getElementById('historyList'),
         clearHistoryBtn: document.getElementById('clearHistoryBtn'),
         toastContainer: document.getElementById('toastContainer'),
@@ -169,6 +171,29 @@
             }
         });
 
+        // PS Mode Toggle Button (Prem Search - writes "PS" to Column K in Prem Sheet)
+        if (dom.btnPsMode) {
+            // Restore saved state
+            if (state.isPremSearch) {
+                dom.btnPsMode.classList.add('active');
+            }
+
+            dom.btnPsMode.addEventListener('click', () => {
+                state.isPremSearch = !state.isPremSearch;
+                localStorage.setItem('premSearchMode', state.isPremSearch ? 'true' : 'false');
+                
+                if (state.isPremSearch) {
+                    dom.btnPsMode.classList.add('active');
+                    showToast('เปิด PS Mode (บันทึก "PS" ลงคอลัมน์ K ของ Prem Sheet)', 'info');
+                } else {
+                    dom.btnPsMode.classList.remove('active');
+                    showToast('ปิด PS Mode', 'info');
+                }
+
+                if (navigator.vibrate) navigator.vibrate(20);
+            });
+        }
+
         // Auto-extract name when link is pasted/typed
         dom.shopLink.addEventListener('input', () => {
             const val = dom.shopLink.value.trim();
@@ -292,10 +317,15 @@
         // Lock submit to prevent double click
         state.isSubmitting = true;
 
-        // แนบ itemType เข้าไปใน prodName ด้วยตัวคั่น ||| (วิธีนี้ส่งได้ 100% เพราะ prodName ส่งสำเร็จทุกครั้ง)
+        // แนบ itemType และ PS Mode เข้าไปใน prodName ด้วยตัวคั่น ||| (เพื่อความชัวร์แบบ 100%)
         let finalProdName = prodName;
-        if (state.selectedItemType) {
-            finalProdName = prodName + '|||' + state.selectedItemType;
+        const extraFlags = [];
+        extraFlags.push(state.selectedItemType || '');
+        if (state.isPremSearch) {
+            extraFlags.push('PS');
+        }
+        if (extraFlags.length > 0) {
+            finalProdName = prodName + '|||' + extraFlags.join('|||');
         }
 
         // 1. Send data to Google Sheets in the background (Non-blocking)
@@ -310,6 +340,7 @@
                 shopLink: shopLink,
                 prodName: finalProdName,
                 handTools: isHandTools,
+                premSearch: state.isPremSearch,
                 sheet: state.selectedSheet,
             }),
         }).catch(error => {

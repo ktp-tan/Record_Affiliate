@@ -336,15 +336,19 @@ function doPost(e) {
     var shopLink = data.shopLink;
     var isHandTools = data.handTools === true;
     
-    // แยก itemType ออกจาก prodName (หน้าเว็บจะส่งมาในรูปแบบ "ชื่อสินค้า|||Cookie")
+    // แยก itemType และ PS Mode ออกจาก prodName (หน้าเว็บจะส่งมาในรูปแบบ "ชื่อสินค้า|||Cookie|||PS")
     var rawProdName = data.prodName || "";
     var productName = "";
     var itemType = "";
+    var isPremSearch = data.premSearch === true || (e.parameter && e.parameter.premSearch === "true");
     
     if (rawProdName.indexOf("|||") !== -1) {
       var parts = rawProdName.split("|||");
       productName = parts[0].trim() || extractProductName(shopLink);
       itemType = parts[1] ? parts[1].trim() : "";
+      if (parts[2] && parts[2].trim() === "PS") {
+        isPremSearch = true;
+      }
     } else {
       productName = rawProdName || extractProductName(shopLink);
       // fallback: อ่าน itemType จาก URL parameter หรือ body โดยตรง
@@ -378,6 +382,11 @@ function doPost(e) {
       sheetSecond.getRange(newRowSecond, 2).setValue(shopLink);
       sheetSecond.getRange(newRowSecond, 3).setValue(productName);
       sheetSecond.getRange(newRowSecond, 4).setValue(itemType); // คอลัมน์ D: Type of Item
+      
+      // ถ้าเปิดใช้งาน PS Mode และบันทึกลง Prem Sheet ให้เพิ่มคำว่า "PS" ในคอลัมน์ K (คอลัมน์ที่ 11)
+      if (secondSheetName === "Prem Sheet" && isPremSearch) {
+        sheetSecond.getRange(newRowSecond, 11).setValue("PS");
+      }
     }
     
     return ContentService.createTextOutput(JSON.stringify({
@@ -417,6 +426,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.7.0)"
+    message: "Record Affiliate API is running! (v3.8.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
