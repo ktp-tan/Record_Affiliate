@@ -21,13 +21,15 @@ var SPREADSHEET_ID = "";
 
 // ฟังก์ชันหาแถวสุดท้ายที่มีข้อมูลจริงในคอลัมน์ A (ป้องกัน Checkbox เปล่าดันข้อมูลลงล่าง)
 function getLastRowOfColA(sheet) {
-  var values = sheet.getRange("A:A").getValues();
+  var lastRow = sheet.getLastRow();
+  if (lastRow === 0) return 1;
+  var values = sheet.getRange(1, 1, lastRow, 1).getValues();
   for (var i = values.length - 1; i >= 0; i--) {
     if (values[i][0] !== "") {
-      return i + 1; // คืนค่าแถว (เริ่มนับจาก 1)
+      return i + 1;
     }
   }
-  return 1; // ถ้าไม่มีข้อมูลเลย ให้เริ่มเขียนที่แถวที่ 2
+  return 1;
 }
 
 // ฟังก์ชันแกะชื่อสินค้าจากลิงก์ Shopee หรือ Lazada
@@ -265,20 +267,24 @@ function onEdit(e) {
   var sheetHand = ss.getSheetByName("Hand Tools");
   if (!sheetPrem) return;
   
+  var sheetPremValues = sheetPrem.getRange("A:B").getValues();
+  var sheetHandValues = sheetHand ? sheetHand.getRange("A:B").getValues() : [];
+  var editedData = sheet.getRange(startRow, 1, numRows, 4).getValues();
+  
   // วนลูปประมวลผลทุกแถวที่มีการแก้ไข (รองรับการแก้ไข/วางข้อมูลหลายแถวพร้อมกัน)
   for (var r = 0; r < numRows; r++) {
     var currentRow = startRow + r;
     
-    var tiktokLink = sheet.getRange(currentRow, 1).getValue().toString().trim();
-    var shopLink = sheet.getRange(currentRow, 2).getValue().toString().trim();
-    var productName = sheet.getRange(currentRow, 3).getValue().toString().trim();
-    var itemType = sheet.getRange(currentRow, 4).getValue().toString().trim(); // คอลัมน์ D: Type of Item
+    var tiktokLink = String(editedData[r][0] || "").trim();
+    var shopLink = String(editedData[r][1] || "").trim();
+    var productName = String(editedData[r][2] || "").trim();
+    var itemType = String(editedData[r][3] || "").trim(); // คอลัมน์ D: Type of Item
     
     // ถ้าว่างหมดทั้ง TikTok Link และ Shopee Link ให้ข้ามไป
     if (!tiktokLink && !shopLink) continue;
     
     // 1. ค้นหาความซ้ำใน Prem Sheet ก่อนเพื่ออัปเดตแถวเดิม
-    var premRow = findRowByLink(sheetPrem, tiktokLink, shopLink);
+    var premRow = findRowByLink(sheetPremValues, tiktokLink, shopLink);
     if (premRow !== -1) {
       if (tiktokLink) sheetPrem.getRange(premRow, 1).setValue(tiktokLink);
       if (shopLink) sheetPrem.getRange(premRow, 2).setValue(shopLink);
@@ -289,7 +295,7 @@ function onEdit(e) {
     
     // 2. ถ้าไม่พบใน Prem Sheet ให้ค้นหาใน Hand Tools เผื่อว่าข้อมูลถูกจับคู่อยู่ที่นั่น
     if (sheetHand) {
-      var handRow = findRowByLink(sheetHand, tiktokLink, shopLink);
+      var handRow = findRowByLink(sheetHandValues, tiktokLink, shopLink);
       if (handRow !== -1) {
         if (tiktokLink) sheetHand.getRange(handRow, 1).setValue(tiktokLink);
         if (shopLink) sheetHand.getRange(handRow, 2).setValue(shopLink);
@@ -309,9 +315,8 @@ function onEdit(e) {
 }
 
 // ฟังก์ชันย่อยสำหรับค้นหาแถวจากลิงก์
-function findRowByLink(targetSheet, tiktokLink, shopLink) {
+function findRowByLink(values, tiktokLink, shopLink) {
   if (!tiktokLink && !shopLink) return -1;
-  var values = targetSheet.getRange("A:B").getValues();
   for (var i = 0; i < values.length; i++) {
     var sheetTiktok = values[i][0] ? values[i][0].toString().trim() : "";
     var sheetShop = values[i][1] ? values[i][1].toString().trim() : "";
@@ -330,77 +335,89 @@ function findRowByLink(targetSheet, tiktokLink, shopLink) {
 // ส่วนที่ 2: doPost - รับข้อมูลจาก Web App
 // ============================================
 function doPost(e) {
+  var lock = LockService.getScriptLock();
   try {
-    var data = JSON.parse(e.postData.contents);
-    var clipLink = data.clipLink;
-    var shopLink = data.shopLink;
-    var isHandTools = data.handTools === true;
+    lock.waitLock(10000); // Wait up to 10 seconds for lock
     
-    // แยก itemType และ PS Mode ออกจาก prodName (หน้าเว็บจะส่งมาในรูปแบบ "ชื่อสินค้า|||Cookie|||PS")
-    var rawProdName = data.prodName || "";
-    var productName = "";
-    var itemType = "";
-    var isPremSearch = data.premSearch === true || (e.parameter && e.parameter.premSearch === "true");
-    
-    if (rawProdName.indexOf("|||") !== -1) {
-      var parts = rawProdName.split("|||");
-      productName = parts[0].trim() || extractProductName(shopLink);
-      itemType = parts[1] ? parts[1].trim() : "";
-      if (parts[2] && parts[2].trim() === "PS") {
-        isPremSearch = true;
-      }
-    } else {
-      productName = rawProdName || extractProductName(shopLink);
-      // fallback: อ่าน itemType จาก URL parameter หรือ body โดยตรง
-      if (e.parameter && e.parameter.itemType) {
-        itemType = e.parameter.itemType;
-      } else if (data.itemType) {
-        itemType = data.itemType;
-      }
-    }
-    
-    var ss = getSpreadsheet();
-    
-    // 1. บันทึกลง Main Sheet (ทุกกรณี)
-    var sheetMain = ss.getSheetByName("Main Sheet");
-    if (sheetMain) {
-      var lastRowInMain = getLastRowOfColA(sheetMain);
-      var newRowMain = lastRowInMain + 1;
-      sheetMain.getRange(newRowMain, 1).setValue(clipLink);
-      sheetMain.getRange(newRowMain, 2).setValue(shopLink);
-      sheetMain.getRange(newRowMain, 3).setValue(productName);
-      sheetMain.getRange(newRowMain, 4).setValue(itemType); // คอลัมน์ D: Type of Item
-    }
-    
-    // 2. บันทึกลง Sheet ที่สอง (ขึ้นอยู่กับ toggle)
-    var secondSheetName = isHandTools ? "Hand Tools" : "Prem Sheet";
-    var sheetSecond = ss.getSheetByName(secondSheetName);
-    if (sheetSecond) {
-      var lastRowInSecond = getLastRowOfColA(sheetSecond);
-      var newRowSecond = lastRowInSecond + 1;
-      sheetSecond.getRange(newRowSecond, 1).setValue(clipLink);
-      sheetSecond.getRange(newRowSecond, 2).setValue(shopLink);
-      sheetSecond.getRange(newRowSecond, 3).setValue(productName);
-      sheetSecond.getRange(newRowSecond, 4).setValue(itemType); // คอลัมน์ D: Type of Item
+    try {
+      var data = JSON.parse(e.postData.contents);
+      var clipLink = data.clipLink;
+      var shopLink = data.shopLink;
+      var isHandTools = data.handTools === true;
       
-      // ถ้าเปิดใช้งาน PS Mode และบันทึกลง Prem Sheet ให้เพิ่มคำว่า "PS" ในคอลัมน์ K (คอลัมน์ที่ 11)
-      if (secondSheetName === "Prem Sheet" && isPremSearch) {
-        sheetSecond.getRange(newRowSecond, 11).setValue("PS");
+      // แยก itemType และ PS Mode ออกจาก prodName (หน้าเว็บจะส่งมาในรูปแบบ "ชื่อสินค้า|||Cookie|||PS")
+      var rawProdName = data.prodName || "";
+      var productName = "";
+      var itemType = "";
+      var isPremSearch = data.premSearch === true || (e.parameter && e.parameter.premSearch === "true");
+      
+      if (rawProdName.indexOf("|||") !== -1) {
+        var parts = rawProdName.split("|||");
+        productName = parts[0].trim() || extractProductName(shopLink);
+        itemType = parts[1] ? parts[1].trim() : "";
+        if (parts[2] && parts[2].trim() === "PS") {
+          isPremSearch = true;
+        }
+      } else {
+        productName = rawProdName || extractProductName(shopLink);
+        // fallback: อ่าน itemType จาก URL parameter หรือ body โดยตรง
+        if (e.parameter && e.parameter.itemType) {
+          itemType = e.parameter.itemType;
+        } else if (data.itemType) {
+          itemType = data.itemType;
+        }
       }
+      
+      var ss = getSpreadsheet();
+      
+      // 1. บันทึกลง Main Sheet (ทุกกรณี)
+      var sheetMain = ss.getSheetByName("Main Sheet");
+      if (sheetMain) {
+        var lastRowInMain = getLastRowOfColA(sheetMain);
+        var newRowMain = lastRowInMain + 1;
+        sheetMain.getRange(newRowMain, 1).setValue(clipLink);
+        sheetMain.getRange(newRowMain, 2).setValue(shopLink);
+        sheetMain.getRange(newRowMain, 3).setValue(productName);
+        sheetMain.getRange(newRowMain, 4).setValue(itemType); // คอลัมน์ D: Type of Item
+      }
+      
+      // 2. บันทึกลง Sheet ที่สอง (ขึ้นอยู่กับ toggle)
+      var secondSheetName = isHandTools ? "Hand Tools" : "Prem Sheet";
+      var sheetSecond = ss.getSheetByName(secondSheetName);
+      if (sheetSecond) {
+        var lastRowInSecond = getLastRowOfColA(sheetSecond);
+        var newRowSecond = lastRowInSecond + 1;
+        sheetSecond.getRange(newRowSecond, 1).setValue(clipLink);
+        sheetSecond.getRange(newRowSecond, 2).setValue(shopLink);
+        sheetSecond.getRange(newRowSecond, 3).setValue(productName);
+        sheetSecond.getRange(newRowSecond, 4).setValue(itemType); // คอลัมน์ D: Type of Item
+        
+        // ถ้าเปิดใช้งาน PS Mode และบันทึกลง Prem Sheet ให้เพิ่มคำว่า "PS" ในคอลัมน์ K (คอลัมน์ที่ 11)
+        if (secondSheetName === "Prem Sheet" && isPremSearch) {
+          sheetSecond.getRange(newRowSecond, 11).setValue("PS");
+        }
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "บันทึกสำเร็จ",
+        productName: productName,
+        targetSheet: secondSheetName
+      })).setMimeType(ContentService.MimeType.JSON);
+      
+    } catch (error) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "error", 
+        message: error.toString()
+      })).setMimeType(ContentService.MimeType.JSON);
     }
-    
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      message: "บันทึกสำเร็จ",
-      productName: productName,
-      targetSheet: secondSheetName
-    })).setMimeType(ContentService.MimeType.JSON);
-    
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "error", 
       message: error.toString()
     })).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -411,6 +428,23 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.action === "extractName") {
     try {
       var url = e.parameter.url;
+      // Domain whitelist to prevent SSRF
+      var allowedDomains = ["shopee.co.th", "shope.ee", "lazada.co.th", "s.shopee.co.th", "vt.tiktok.com", "www.tiktok.com", "www.instagram.com"];
+      var isAllowed = false;
+      if (url) {
+        for (var d = 0; d < allowedDomains.length; d++) {
+          if (url.indexOf(allowedDomains[d]) !== -1) {
+            isAllowed = true;
+            break;
+          }
+        }
+      }
+      if (!isAllowed) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          message: "URL domain not allowed"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
       var name = extractProductName(url);
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
@@ -426,6 +460,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.8.0)"
+    message: "Record Affiliate API is running! (v3.9.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }

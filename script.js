@@ -10,7 +10,6 @@
 
     const state = {
         scriptUrl: localStorage.getItem('appsScriptUrl') || DEFAULT_SCRIPT_URL,
-        selectedSheet: 'Main Sheet',
         selectedItemType: '', // Selected type: Cookie, HighComs, or empty
         isPremSearch: localStorage.getItem('premSearchMode') === 'true', // Prem Search Mode (PS in Column K of Prem Sheet)
         isSubmitting: false,
@@ -341,7 +340,6 @@
                 prodName: finalProdName,
                 handTools: isHandTools,
                 premSearch: state.isPremSearch,
-                sheet: state.selectedSheet,
             }),
         }).catch(error => {
             console.error('Background send error:', error);
@@ -355,7 +353,7 @@
         if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
 
         // Add to history instantly (displaying product name if available)
-        const sheetLabel = isHandTools ? '🔧 Hand Tools' : state.selectedSheet;
+        const sheetLabel = isHandTools ? '🔧 Hand Tools' : 'Main Sheet';
         addToHistory(clipLink, shopLink, sheetLabel, prodName);
 
         showToast('บันทึกประวัติแล้ว กำลังส่งไป Google Sheets...', 'success');
@@ -426,7 +424,7 @@
         dom.historyList.innerHTML = state.history
             .map((item) => {
                 const time = formatTime(item.timestamp);
-                const displayTitle = item.prodName ? `🏷️ ${item.prodName}` : item.sheet;
+                const displayTitle = item.prodName ? `🏷️ ${escapeHtml(item.prodName)}` : item.sheet;
                 return `
                     <div class="history-item">
                         <div class="history-item-icon">
@@ -437,8 +435,8 @@
                         <div class="history-item-content">
                             <div class="history-item-sheet">${displayTitle}</div>
                             <div class="history-item-links">
-                                <div class="history-item-link"><span>🎬</span> ${truncateUrl(item.clipLink)}</div>
-                                <div class="history-item-link"><span>🛒</span> ${truncateUrl(item.shopLink)}</div>
+                                <div class="history-item-link"><span>🎬</span> ${escapeHtml(truncateUrl(item.clipLink))}</div>
+                                <div class="history-item-link"><span>🛒</span> ${escapeHtml(truncateUrl(item.shopLink))}</div>
                             </div>
                         </div>
                         <div class="history-item-time">${time}</div>
@@ -527,6 +525,11 @@
         return null;
     }
 
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
     function truncateUrl(url) {
         if (url.length > 50) {
             return url.substring(0, 47) + '...';
@@ -599,6 +602,7 @@
 
     // --- Dynamic Name Fetching Helpers ---
     let fetchTimeout = null;
+    let fetchAbortController = null;
     function fetchNameFromBackend(url) {
         if (!state.scriptUrl) return;
         
@@ -616,8 +620,11 @@
         if (fetchTimeout) clearTimeout(fetchTimeout);
         
         fetchTimeout = setTimeout(() => {
+            if (fetchAbortController) fetchAbortController.abort();
+            fetchAbortController = new AbortController();
+            
             const fetchUrl = `${state.scriptUrl}?action=extractName&url=${encodeURIComponent(cleanUrl)}`;
-            fetch(fetchUrl)
+            fetch(fetchUrl, { signal: fetchAbortController.signal })
                 .then(res => res.json())
                 .then(data => {
                     if (data && data.status === 'success' && data.productName) {
@@ -632,6 +639,7 @@
                     updateSubmitButton();
                 })
                 .catch(err => {
+                    if (err.name === 'AbortError') return;
                     console.error('Fetch name error:', err);
                     dom.prodName.placeholder = 'ไม่สามารถดึงชื่อสินค้าได้ กรุณาพิมพ์เอง';
                     dom.prodName.disabled = false;

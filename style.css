@@ -377,75 +377,7 @@ body {
     filter: blur(1px);
 }
 
-/* Sheet Selector */
-.sheet-selector {
-    margin-bottom: 24px;
-}
 
-.sheet-selector label {
-    display: block;
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    margin-bottom: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.sheet-tabs {
-    display: flex;
-    gap: 8px;
-}
-
-.sheet-tab {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 10px 12px;
-    background: var(--bg-input);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-    font-family: inherit;
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: var(--transition-fast);
-    position: relative;
-    overflow: hidden;
-}
-
-.sheet-tab::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--accent-gradient);
-    opacity: 0;
-    transition: opacity var(--transition-fast);
-}
-
-.sheet-tab:hover {
-    border-color: var(--border-active);
-    color: var(--text-primary);
-}
-
-.sheet-tab.active {
-    border-color: var(--accent-primary);
-    color: white;
-    background: transparent;
-}
-
-.sheet-tab.active::before {
-    opacity: 0.15;
-}
-
-.sheet-tab svg,
-.sheet-tab span {
-    position: relative;
-    z-index: 1;
-}
 
 /* Form Fields */
 .form-fields {
@@ -1041,10 +973,7 @@ html {
         transition: transform 0.1s ease;
     }
 
-    .sheet-tab:active {
-        transform: scale(0.96);
-        transition: transform 0.1s ease;
-    }
+
 
     .btn-paste:active {
         transform: scale(0.9);
@@ -1141,10 +1070,7 @@ html {
         font-size: 1rem;
     }
 
-    .sheet-tab {
-        padding: 12px 8px;
-        font-size: 0.82rem;
-    }
+
 
     .btn-submit {
         padding: 16px 20px;
@@ -1187,8 +1113,8 @@ html {
 }
 
 .keyword-badge:hover, .keyword-badge:active {
-    background: var(--primary-light);
-    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.15);
+    border-color: var(--accent-primary);
     color: #fff;
     transform: translateY(-1px);
 }
