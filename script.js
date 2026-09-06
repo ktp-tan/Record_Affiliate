@@ -100,13 +100,8 @@
                     target.value = text;
                     target.dispatchEvent(new Event('input'));
 
-                    // Auto-focus next input for faster workflow on mobile
-                    if (btn.dataset.target === 'clipLink') {
-                        dom.shopLink.focus();
-                    } else {
-                        // Blur to hide keyboard after last field
-                        target.blur();
-                    }
+                    // Blur to hide keyboard after paste
+                    target.blur();
 
                     // Haptic feedback on mobile
                     if (navigator.vibrate) navigator.vibrate(30);
@@ -125,11 +120,8 @@
             });
         });
 
-        // Input change -> update submit button & auto-copy last Shopee link if empty
-        dom.clipLink.addEventListener('input', () => {
-            autoCopyLastShopLinkIfNeeded();
-            updateSubmitButton();
-        });
+        // Input change -> update submit button
+        dom.clipLink.addEventListener('input', updateSubmitButton);
         dom.shopLink.addEventListener('input', updateSubmitButton);
 
         // Hand Tools checkbox state change fallback for styling
@@ -313,34 +305,12 @@
         return '';
     }
 
-    function autoCopyLastShopLinkIfNeeded() {
-        const clipVal = dom.clipLink.value.trim();
-        const currentShopVal = dom.shopLink.value.trim();
-        
-        // ถ้าวางคลิปแล้วแต่ช่อง Shopee ยังว่างอยู่ ให้ดึงของล่าสุดมาใส่ให้อัตโนมัติ
-        if (clipVal && !currentShopVal) {
-            const lastShop = getLastShopeeLink();
-            if (lastShop) {
-                dom.shopLink.value = lastShop;
-                const lastProd = getLastProdName();
-                if (lastProd && !dom.prodName.value.trim()) {
-                    dom.prodName.value = lastProd;
-                    if (typeof renderKeywordSuggestions === 'function') {
-                        renderKeywordSuggestions(lastProd);
-                    }
-                }
-                showToast('คัดลอกลิงก์ Shopee ล่าสุดให้อัตโนมัติ', 'info');
-            }
-        }
-    }
-
     // --- Update Submit Button ---
     function updateSubmitButton() {
         const hasClipLink = dom.clipLink.value.trim() !== '';
-        const hasShopLink = dom.shopLink.value.trim() !== '' || getLastShopeeLink() !== '';
         const hasUrl = state.scriptUrl !== '';
 
-        dom.submitBtn.disabled = !(hasClipLink && hasShopLink && hasUrl);
+        dom.submitBtn.disabled = !(hasClipLink && hasUrl);
     }
 
     // --- Handle Submit ---
@@ -348,28 +318,12 @@
         if (state.isSubmitting) return;
 
         const clipLink = dom.clipLink.value.trim();
-        let shopLink = dom.shopLink.value.trim();
-        let prodName = dom.prodName.value.trim();
+        const shopLink = dom.shopLink.value.trim();
+        const prodName = dom.prodName.value.trim();
         const isHandTools = dom.handToolsCheck.checked;
 
-        // ถ้ามีลิงก์คลิปแต่ยังไม่ได้ใส่ลิงก์ Shopee ให้ดึงลิงก์ Shopee ล่าสุดมาใช้อัตโนมัติ
-        if (clipLink && !shopLink) {
-            const lastShop = getLastShopeeLink();
-            if (lastShop) {
-                shopLink = lastShop;
-                dom.shopLink.value = lastShop;
-                if (!prodName) {
-                    const lastProd = getLastProdName();
-                    if (lastProd) {
-                        prodName = lastProd;
-                        dom.prodName.value = lastProd;
-                    }
-                }
-            }
-        }
-
-        if (!clipLink || !shopLink) {
-            showToast('กรุณากรอกลิงก์ให้ครบทั้ง 2 ช่อง', 'error');
+        if (!clipLink) {
+            showToast('กรุณากรอกลิงก์คลิป', 'error');
             return;
         }
 
@@ -379,10 +333,12 @@
             return;
         }
 
-        // บันทึกลิงก์ Shopee และชื่อสินค้าล่าสุดไว้สำหรับฟีเจอร์ Auto-copy
-        localStorage.setItem('lastSubmittedShopLink', shopLink);
-        if (prodName) {
-            localStorage.setItem('lastSubmittedProdName', prodName);
+        // ถ้ามีการระบุ shopLink ให้จำไว้ใน localStorage
+        if (shopLink) {
+            localStorage.setItem('lastSubmittedShopLink', shopLink);
+            if (prodName) {
+                localStorage.setItem('lastSubmittedProdName', prodName);
+            }
         }
 
         // Lock submit to prevent double click
@@ -400,6 +356,7 @@
         }
 
         // 1. Send data to Google Sheets in the background (Non-blocking)
+        // ถ้า shopLink เป็นค่าว่าง หลังบ้าน (Apps Script) จะดึงลิงก์และชื่อสินค้าจากแถวล่าสุดของ Main Sheet ให้อัตโนมัติ
         fetch(state.scriptUrl, {
             method: 'POST',
             mode: 'no-cors',
@@ -424,11 +381,17 @@
         // Haptic feedback on mobile
         if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
 
-        // Add to history instantly (displaying product name if available)
+        // Add to history instantly
         const sheetLabel = isHandTools ? '🔧 Hand Tools' : 'Main Sheet';
-        addToHistory(clipLink, shopLink, sheetLabel, prodName);
+        const displayShopLink = shopLink || (getLastShopeeLink() || '(ใช้ลิงก์ล่าสุดจากชีต)');
+        const displayProdName = prodName || (shopLink ? '' : (getLastProdName() || ''));
+        addToHistory(clipLink, displayShopLink, sheetLabel, displayProdName);
 
-        showToast('บันทึกประวัติแล้ว กำลังส่งไป Google Sheets...', 'success');
+        if (shopLink) {
+            showToast('บันทึกประวัติแล้ว กำลังส่งไป Google Sheets...', 'success');
+        } else {
+            showToast('บันทึกแล้ว! (หลังบ้านดึงลิงก์ Shopee ล่าสุดให้)', 'success');
+        }
 
         // Clear inputs instantly
         dom.clipLink.value = '';

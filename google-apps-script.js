@@ -369,9 +369,23 @@ function doPost(e) {
       }
       
       var ss = getSpreadsheet();
+      var sheetMain = ss.getSheetByName("Main Sheet");
+      
+      // ถ้าไม่ได้ส่ง shopLink มา (เว้นว่างไว้) ให้ดึง shopLink และชื่อสินค้าจากแถวล่าสุดของ Main Sheet อัตโนมัติ
+      if (!shopLink && sheetMain) {
+        var prevRow = getLastRowOfColA(sheetMain);
+        if (prevRow >= 2) {
+          var prevShop = String(sheetMain.getRange(prevRow, 2).getValue() || "").trim();
+          if (prevShop) {
+            shopLink = prevShop;
+            if (!productName) {
+              productName = String(sheetMain.getRange(prevRow, 3).getValue() || "").trim();
+            }
+          }
+        }
+      }
       
       // 1. บันทึกลง Main Sheet (ทุกกรณี)
-      var sheetMain = ss.getSheetByName("Main Sheet");
       if (sheetMain) {
         var lastRowInMain = getLastRowOfColA(sheetMain);
         var newRowMain = lastRowInMain + 1;
@@ -460,6 +474,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.10.0)"
+    message: "Record Affiliate API is running! (v3.11.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
