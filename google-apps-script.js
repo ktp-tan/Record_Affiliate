@@ -460,6 +460,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.9.0)"
+    message: "Record Affiliate API is running! (v3.10.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
