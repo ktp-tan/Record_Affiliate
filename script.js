@@ -662,11 +662,11 @@
     }
 
     // --- Dynamic Name Fetching Helpers ---
+    const WORKER_SCRAPER_URL = 'https://9d9f405b-kaneskn-worker.p2scalworkhost.workers.dev/api/scrape-product';
     let fetchTimeout = null;
     let fetchAbortController = null;
+
     function fetchNameFromBackend(url) {
-        if (!state.scriptUrl) return;
-        
         let cleanUrl = url.trim();
         if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
             cleanUrl = 'https://' + cleanUrl;
@@ -683,30 +683,79 @@
         fetchTimeout = setTimeout(() => {
             if (fetchAbortController) fetchAbortController.abort();
             fetchAbortController = new AbortController();
-            
-            const fetchUrl = `${state.scriptUrl}?action=extractName&url=${encodeURIComponent(cleanUrl)}`;
-            fetch(fetchUrl, { signal: fetchAbortController.signal })
+
+            // Check if URL already has shopId and itemId (e.g. product/123/456 or -i.123.456 or opaanlp/123/456)
+            const idMatch = cleanUrl.match(/opaanlp\/(\d+)\/(\d+)/i) ||
+                            cleanUrl.match(/product\/(\d+)\/(\d+)/i) ||
+                            cleanUrl.match(/-i\.(\d+)\.(\d+)/i) ||
+                            cleanUrl.match(/\/(\d+)\/(\d+)/);
+
+            if (idMatch && cleanUrl.includes('shopee')) {
+                const canonicalUrl = `https://shopee.co.th/product/${idMatch[1]}/${idMatch[2]}`;
+                fetch(WORKER_SCRAPER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ productUrl: canonicalUrl }),
+                    signal: fetchAbortController.signal
+                })
                 .then(res => res.json())
                 .then(data => {
-                    if (data && data.status === 'success' && data.productName) {
-                        dom.prodName.value = data.productName;
-                        dom.prodName.placeholder = 'ชื่อสินค้า (ดึงให้อัตโนมัติจากลิงก์ที่วาง)';
-                        renderKeywordSuggestions(data.productName);
-                        showToast('ดึงชื่อสินค้าสำเร็จ!', 'success');
-                    } else {
-                        dom.prodName.placeholder = 'ไม่สามารถดึงชื่อสินค้าได้ กรุณาพิมพ์เอง';
+                    if (data && data.success && data.title) {
+                        const title = data.title.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, '').trim();
+                        if (title && title !== 'Shopee') {
+                            dom.prodName.value = title;
+                            dom.prodName.placeholder = 'ชื่อสินค้า (ดึงให้อัตโนมัติจากลิงก์ที่วาง)';
+                            renderKeywordSuggestions(title);
+                            showToast('ดึงชื่อสินค้าสำเร็จ!', 'success');
+                            dom.prodName.disabled = false;
+                            updateSubmitButton();
+                            return;
+                        }
                     }
-                    dom.prodName.disabled = false;
-                    updateSubmitButton();
+                    // Fallback to Apps Script
+                    callBackendExtract(cleanUrl);
                 })
                 .catch(err => {
                     if (err.name === 'AbortError') return;
-                    console.error('Fetch name error:', err);
-                    dom.prodName.placeholder = 'ไม่สามารถดึงชื่อสินค้าได้ กรุณาพิมพ์เอง';
-                    dom.prodName.disabled = false;
-                    updateSubmitButton();
+                    callBackendExtract(cleanUrl);
                 });
+                return;
+            }
+
+            // Shortlinks (s.shopee.co.th, th.shp.ee, etc.) -> Apps Script handles redirects
+            callBackendExtract(cleanUrl);
         }, 200); // 200ms debounce
+    }
+
+    function callBackendExtract(cleanUrl) {
+        if (!state.scriptUrl) {
+            dom.prodName.placeholder = 'ไม่สามารถดึงชื่อสินค้าได้ กรุณาพิมพ์เอง';
+            dom.prodName.disabled = false;
+            return;
+        }
+
+        const fetchUrl = `${state.scriptUrl}?action=extractName&url=${encodeURIComponent(cleanUrl)}`;
+        fetch(fetchUrl, { signal: fetchAbortController.signal })
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.status === 'success' && data.productName) {
+                    dom.prodName.value = data.productName;
+                    dom.prodName.placeholder = 'ชื่อสินค้า (ดึงให้อัตโนมัติจากลิงก์ที่วาง)';
+                    renderKeywordSuggestions(data.productName);
+                    showToast('ดึงชื่อสินค้าสำเร็จ!', 'success');
+                } else {
+                    dom.prodName.placeholder = 'ไม่สามารถดึงชื่อสินค้าได้ กรุณาพิมพ์เอง';
+                }
+                dom.prodName.disabled = false;
+                updateSubmitButton();
+            })
+            .catch(err => {
+                if (err.name === 'AbortError') return;
+                console.error('Fetch name error:', err);
+                dom.prodName.placeholder = 'ไม่สามารถดึงชื่อสินค้าได้ กรุณาพิมพ์เอง';
+                dom.prodName.disabled = false;
+                updateSubmitButton();
+            });
     }
 
     function isValidProductUrl(str) {

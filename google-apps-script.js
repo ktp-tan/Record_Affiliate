@@ -1,5 +1,5 @@
 // ============================================
-// Google Apps Script สำหรับ Record Affiliate (เวอร์ชันสมบูรณ์ ดึงชื่อสินค้าอัตโนมัติ)
+// Google Apps Script สำหรับ Record Affiliate (เวอร์ชันดึงชื่อสินค้าผ่าน Worker Scraper v3.13.0)
 // ============================================
 // วิธีติดตั้ง:
 // 1. เปิด Google Sheet "GodofAff Sheet"
@@ -18,6 +18,9 @@
 // คัดลอก ID จาก URL ของชีตมาใส่ตรงนี้ได้เลย (เผื่อกรณีฟังก์ชัน setup ทำงานไม่สำเร็จ)
 // ตัวอย่าง URL: https://docs.google.com/spreadsheets/d/ใส่_ID_ตรงนี้/edit
 var SPREADSHEET_ID = ""; 
+
+// Worker Scraper URL จากระบบ AutopostTool (ดึงข้อมูลสินค้า Shopee แม่นยำ 100% ไม่โดนบล็อก)
+var WORKER_SCRAPER_URL = "https://9d9f405b-kaneskn-worker.p2scalworkhost.workers.dev/api/scrape-product"; 
 
 // ฟังก์ชันหาแถวสุดท้ายที่มีข้อมูลจริงในคอลัมน์ A (ป้องกัน Checkbox เปล่าดันข้อมูลลงล่าง)
 function getLastRowOfColA(sheet) {
@@ -100,30 +103,61 @@ function extractProductName(url) {
           itemId = iMatch[2];
         }
       }
+      if (!shopId) {
+        var slashMatch = decodedUrl.match(/\/(\d+)\/(\d+)/);
+        if (slashMatch) {
+          shopId = slashMatch[1];
+          itemId = slashMatch[2];
+        }
+      }
       
-      // ถ้าพบ shopId และ itemId ให้ fetch หน้า Canonical Product Page ด้วย Desktop Chrome
       if (shopId && itemId) {
         var productPageUrl = "https://shopee.co.th/product/" + shopId + "/" + itemId;
-        var pageRes = UrlFetchApp.fetch(productPageUrl, {
-          'muteHttpExceptions': true,
-          'followRedirects': true,
-          'headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'th-TH,th;q=0.9,en;q=0.8'
+        
+        // 2.1 ดึงผ่าน Cloudflare Worker Scraper จากโปรเจกต์ AutopostTool (ได้ผล 100% ไม่โดนบล็อก)
+        try {
+          var workerRes = UrlFetchApp.fetch(WORKER_SCRAPER_URL, {
+            'method': 'post',
+            'contentType': 'application/json',
+            'muteHttpExceptions': true,
+            'payload': JSON.stringify({ productUrl: productPageUrl })
+          });
+          if (workerRes.getResponseCode() === 200) {
+            var workerData = JSON.parse(workerRes.getContentText());
+            if (workerData && workerData.success && workerData.title) {
+              var title = workerData.title.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
+              if (title && title !== "Shopee" && title.length > 2) {
+                return decodeHtmlEntities(title);
+              }
+            }
           }
-        });
-        var pageHtml = pageRes.getContentText();
-        var ogTitleMatch = pageHtml.match(/property=["']og:title["']\s+content=["']([^"']+)["']/i) || 
-                           pageHtml.match(/content=["']([^"']+)["']\s+property=["']og:title["']/i);
-        var titleTagMatch = pageHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-        var foundTitle = ogTitleMatch ? ogTitleMatch[1] : (titleTagMatch ? titleTagMatch[1] : "");
-        if (foundTitle) {
-          foundTitle = foundTitle.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
-          if (foundTitle && foundTitle !== "Shopee" && foundTitle.length > 2) {
-            return decodeHtmlEntities(foundTitle);
-          }
+        } catch (we) {
+          Logger.log("Worker Scrape Error: " + we);
         }
+        
+        // 2.2 Fallback: Fetch หน้า Canonical Product Page ด้วย Desktop Chrome
+        try {
+          var pageRes = UrlFetchApp.fetch(productPageUrl, {
+            'muteHttpExceptions': true,
+            'followRedirects': true,
+            'headers': {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'th-TH,th;q=0.9,en;q=0.8'
+            }
+          });
+          var pageHtml = pageRes.getContentText();
+          var ogTitleMatch = pageHtml.match(/property=["']og:title["']\s+content=["']([^"']+)["']/i) || 
+                             pageHtml.match(/content=["']([^"']+)["']\s+property=["']og:title["']/i);
+          var titleTagMatch = pageHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+          var foundTitle = ogTitleMatch ? ogTitleMatch[1] : (titleTagMatch ? titleTagMatch[1] : "");
+          if (foundTitle) {
+            foundTitle = foundTitle.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
+            if (foundTitle && foundTitle !== "Shopee" && foundTitle.length > 2) {
+              return decodeHtmlEntities(foundTitle);
+            }
+          }
+        } catch (pe) {}
       }
     }
     
@@ -525,6 +559,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.12.0)"
+    message: "Record Affiliate API is running! (v3.13.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
