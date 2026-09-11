@@ -688,7 +688,7 @@
             const idMatch = cleanUrl.match(/opaanlp\/(\d+)\/(\d+)/i) ||
                             cleanUrl.match(/product\/(\d+)\/(\d+)/i) ||
                             cleanUrl.match(/-i\.(\d+)\.(\d+)/i) ||
-                            cleanUrl.match(/\/(\d+)\/(\d+)/);
+                            cleanUrl.match(/\/(\d{5,})\/(\d{5,})/);
 
             if (idMatch && cleanUrl.includes('shopee')) {
                 const canonicalUrl = `https://shopee.co.th/product/${idMatch[1]}/${idMatch[2]}`;

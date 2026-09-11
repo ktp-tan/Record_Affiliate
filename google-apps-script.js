@@ -1,5 +1,5 @@
 // ============================================
-// Google Apps Script สำหรับ Record Affiliate (เวอร์ชันดึงชื่อสินค้าผ่าน Worker Scraper v3.13.0)
+// Google Apps Script สำหรับ Record Affiliate (เวอร์ชันดึงชื่อสินค้าผ่าน Worker Scraper v3.14.0)
 // ============================================
 // วิธีติดตั้ง:
 // 1. เปิด Google Sheet "GodofAff Sheet"
@@ -36,10 +36,12 @@ function getLastRowOfColA(sheet) {
 }
 
 // ฟังก์ชันแกะชื่อสินค้าจากลิงก์ Shopee หรือ Lazada
-function extractProductName(url) {
+function extractProductName(url, debugLogs) {
   if (!url) return "";
+  debugLogs = debugLogs || [];
   try {
     var currentUrl = url.trim();
+    debugLogs.push("Original URL: " + currentUrl);
     
     // กรองเฉพาะ Shopee หรือ Lazada
     var isShopee = currentUrl.indexOf("shopee") !== -1 || currentUrl.indexOf("shope.ee") !== -1 || currentUrl.indexOf("shp.ee") !== -1;
@@ -58,16 +60,42 @@ function extractProductName(url) {
     
     for (var i = 0; i < 6; i++) {
       var response = UrlFetchApp.fetch(currentUrl, options);
+      var code = response.getResponseCode();
       var headers = response.getHeaders();
-      var location = headers['Location'] || headers['location'];
+      debugLogs.push("Step " + (i+1) + " status=" + code + " for " + currentUrl);
+      
+      var location = null;
+      for (var key in headers) {
+        if (key.toLowerCase() === 'location') {
+          location = headers[key];
+          break;
+        }
+      }
+      
+      // ถ้า header ไม่มี Location ลองควานหา href ใน HTML body
+      if (!location) {
+        var content = response.getContentText();
+        var matchHref = content.match(/href=["'](https?:\/\/[^"']+)["']/i) ||
+                        content.match(/href=["'](\/[^"']+)["']/i);
+        if (matchHref) {
+          location = matchHref[1].replace(/&amp;/g, "&");
+          debugLogs.push("Found href in body: " + location.substring(0, 80));
+        }
+      }
+      
       if (location) {
+        if (location.indexOf("http") !== 0) {
+          location = "https://shopee.co.th" + (location.indexOf("/") === 0 ? "" : "/") + location;
+        }
         currentUrl = location;
+        debugLogs.push("Redirecting to: " + currentUrl.substring(0, 100));
       } else {
         break;
       }
     }
     
     var decodedUrl = decodeURIComponent(currentUrl);
+    debugLogs.push("Final Decoded URL: " + decodedUrl.substring(0, 100));
     
     // กรณีที่ 1: Shopee ลิงก์ยาวที่มี slug ชื่อสินค้า (มี -i.)
     if (decodedUrl.indexOf("-i.") !== -1) {
@@ -75,7 +103,9 @@ function extractProductName(url) {
       var lastSegment = parts[parts.length - 1]; 
       var rawSlug = lastSegment.split("-i.")[0];
       if (rawSlug && rawSlug.length > 2 && rawSlug.indexOf("opaanlp") === -1) {
-        return rawSlug.replace(/-/g, " ").trim();
+        var slugTitle = rawSlug.replace(/-/g, " ").trim();
+        debugLogs.push("Found slug title: " + slugTitle);
+        return slugTitle;
       }
     } 
     
@@ -104,12 +134,14 @@ function extractProductName(url) {
         }
       }
       if (!shopId) {
-        var slashMatch = decodedUrl.match(/\/(\d+)\/(\d+)/);
+        var slashMatch = decodedUrl.match(/\/(\d{5,})\/(\d{5,})/);
         if (slashMatch) {
           shopId = slashMatch[1];
           itemId = slashMatch[2];
         }
       }
+      
+      debugLogs.push("Extracted IDs: shopId=" + shopId + ", itemId=" + itemId);
       
       if (shopId && itemId) {
         var productPageUrl = "https://shopee.co.th/product/" + shopId + "/" + itemId;
@@ -122,8 +154,11 @@ function extractProductName(url) {
             'muteHttpExceptions': true,
             'payload': JSON.stringify({ productUrl: productPageUrl })
           });
-          if (workerRes.getResponseCode() === 200) {
+          var wCode = workerRes.getResponseCode();
+          debugLogs.push("Worker response status: " + wCode);
+          if (wCode === 200) {
             var workerData = JSON.parse(workerRes.getContentText());
+            debugLogs.push("Worker success: " + (workerData ? workerData.success : false) + ", title: " + (workerData ? workerData.title : ""));
             if (workerData && workerData.success && workerData.title) {
               var title = workerData.title.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
               if (title && title !== "Shopee" && title.length > 2) {
@@ -132,7 +167,7 @@ function extractProductName(url) {
             }
           }
         } catch (we) {
-          Logger.log("Worker Scrape Error: " + we);
+          debugLogs.push("Worker Scrape Error: " + we.toString());
         }
         
         // 2.2 Fallback: Fetch หน้า Canonical Product Page ด้วย Desktop Chrome
@@ -527,6 +562,7 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.action === "extractName") {
     try {
       var url = e.parameter.url;
+      var debugLogs = [];
       // Domain whitelist to prevent SSRF
       var allowedDomains = ["shopee.co.th", "shope.ee", "shp.ee", "th.shp.ee", "lazada.co.th", "s.shopee.co.th", "vt.tiktok.com", "www.tiktok.com", "www.instagram.com"];
       var isAllowed = false;
@@ -544,10 +580,11 @@ function doGet(e) {
           message: "URL domain not allowed"
         })).setMimeType(ContentService.MimeType.JSON);
       }
-      var name = extractProductName(url);
+      var name = extractProductName(url, debugLogs);
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
-        productName: name
+        productName: name,
+        debug: debugLogs
       })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({
@@ -559,6 +596,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.13.0)"
+    message: "Record Affiliate API is running! (v3.14.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }

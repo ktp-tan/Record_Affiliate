@@ -524,7 +524,8 @@ body {
 
 .btn-content,
 .btn-loading,
-.btn-success {
+.btn-success,
+.btn-success-text {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -532,7 +533,8 @@ body {
 }
 
 .btn-loading,
-.btn-success {
+.btn-success,
+.btn-success-text {
     display: none;
 }
 
@@ -541,7 +543,9 @@ body {
 .btn-submit.loading { pointer-events: none; }
 
 .btn-submit.success .btn-content { display: none; }
-.btn-submit.success .btn-success { display: flex; }
+.btn-submit.success .btn-loading { display: none; }
+.btn-submit.success .btn-success,
+.btn-submit.success .btn-success-text { display: flex; }
 .btn-submit.success {
     background: linear-gradient(135deg, #059669, #10b981);
     box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
