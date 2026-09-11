@@ -662,9 +662,27 @@
     }
 
     // --- Dynamic Name Fetching Helpers ---
+    const GODOFAFF_SCRAPER_URL = 'https://godofaff.com/api/scrape-product';
     const WORKER_SCRAPER_URL = 'https://9d9f405b-kaneskn-worker.p2scalworkhost.workers.dev/api/scrape-product';
     let fetchTimeout = null;
     let fetchAbortController = null;
+
+    function sanitizeProductTitle(raw) {
+        if (!raw) return '';
+        return raw
+            .replace(/\s*\|\s*(Shopee|Lazada).*$/i, '')
+            .replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, '')
+            .trim();
+    }
+
+    function applyFetchedProductName(title) {
+        dom.prodName.value = title;
+        dom.prodName.placeholder = 'ชื่อสินค้า (ดึงให้อัตโนมัติจากลิงก์ที่วาง)';
+        renderKeywordSuggestions(title);
+        showToast('ดึงชื่อสินค้าสำเร็จ!', 'success');
+        dom.prodName.disabled = false;
+        updateSubmitButton();
+    }
 
     function fetchNameFromBackend(url) {
         let cleanUrl = url.trim();
@@ -680,11 +698,35 @@
         // Debounce to prevent multiple API requests
         if (fetchTimeout) clearTimeout(fetchTimeout);
         
-        fetchTimeout = setTimeout(() => {
+        fetchTimeout = setTimeout(async () => {
             if (fetchAbortController) fetchAbortController.abort();
             fetchAbortController = new AbortController();
+            const signal = fetchAbortController.signal;
 
-            // Check if URL already has shopId and itemId (e.g. product/123/456 or -i.123.456 or opaanlp/123/456)
+            // วิธีที่ 1: เรียก godofaff.com Scraper API โดยตรง (รองรับ Shopee shortlink s.shopee.co.th รวดเร็วและแม่นยำ)
+            try {
+                const gRes = await fetch(GODOFAFF_SCRAPER_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ productUrl: cleanUrl }),
+                    signal: signal
+                });
+                if (gRes.ok) {
+                    const gData = await gRes.json();
+                    if (gData && gData.success && gData.title) {
+                        const title = sanitizeProductTitle(gData.title);
+                        if (title && title !== 'Shopee' && title !== 'Lazada' && title.length > 2) {
+                            applyFetchedProductName(title);
+                            return;
+                        }
+                    }
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                console.warn('Godofaff scraper failed, trying fallback worker/Apps Script:', err);
+            }
+
+            // วิธีที่ 2: ถ้าเป็น Shopee ที่มี ShopID / ItemID ให้ลอง Cloudflare Worker
             const idMatch = cleanUrl.match(/opaanlp\/(\d+)\/(\d+)/i) ||
                             cleanUrl.match(/product\/(\d+)\/(\d+)/i) ||
                             cleanUrl.match(/-i\.(\d+)\.(\d+)/i) ||
@@ -692,39 +734,32 @@
 
             if (idMatch && cleanUrl.includes('shopee')) {
                 const canonicalUrl = `https://shopee.co.th/product/${idMatch[1]}/${idMatch[2]}`;
-                fetch(WORKER_SCRAPER_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ productUrl: canonicalUrl }),
-                    signal: fetchAbortController.signal
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data.success && data.title) {
-                        const title = data.title.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, '').trim();
-                        if (title && title !== 'Shopee') {
-                            dom.prodName.value = title;
-                            dom.prodName.placeholder = 'ชื่อสินค้า (ดึงให้อัตโนมัติจากลิงก์ที่วาง)';
-                            renderKeywordSuggestions(title);
-                            showToast('ดึงชื่อสินค้าสำเร็จ!', 'success');
-                            dom.prodName.disabled = false;
-                            updateSubmitButton();
-                            return;
+                try {
+                    const wRes = await fetch(WORKER_SCRAPER_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ productUrl: canonicalUrl }),
+                        signal: signal
+                    });
+                    if (wRes.ok) {
+                        const wData = await wRes.json();
+                        if (wData && wData.success && wData.title) {
+                            const title = sanitizeProductTitle(wData.title);
+                            if (title && title !== 'Shopee' && title.length > 2) {
+                                applyFetchedProductName(title);
+                                return;
+                            }
                         }
                     }
-                    // Fallback to Apps Script
-                    callBackendExtract(cleanUrl);
-                })
-                .catch(err => {
+                } catch (err) {
                     if (err.name === 'AbortError') return;
-                    callBackendExtract(cleanUrl);
-                });
-                return;
+                    console.warn('Worker scraper failed:', err);
+                }
             }
 
-            // Shortlinks (s.shopee.co.th, th.shp.ee, etc.) -> Apps Script handles redirects
+            // วิธีที่ 3: Fallback เรียก Google Apps Script backend
             callBackendExtract(cleanUrl);
-        }, 200); // 200ms debounce
+        }, 150);
     }
 
     function callBackendExtract(cleanUrl) {
@@ -739,15 +774,12 @@
             .then(res => res.json())
             .then(data => {
                 if (data && data.status === 'success' && data.productName) {
-                    dom.prodName.value = data.productName;
-                    dom.prodName.placeholder = 'ชื่อสินค้า (ดึงให้อัตโนมัติจากลิงก์ที่วาง)';
-                    renderKeywordSuggestions(data.productName);
-                    showToast('ดึงชื่อสินค้าสำเร็จ!', 'success');
+                    applyFetchedProductName(data.productName);
                 } else {
                     dom.prodName.placeholder = 'ไม่สามารถดึงชื่อสินค้าได้ กรุณาพิมพ์เอง';
+                    dom.prodName.disabled = false;
+                    updateSubmitButton();
                 }
-                dom.prodName.disabled = false;
-                updateSubmitButton();
             })
             .catch(err => {
                 if (err.name === 'AbortError') return;
