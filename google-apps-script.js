@@ -39,17 +39,21 @@ function extractProductName(url) {
     var currentUrl = url.trim();
     
     // กรองเฉพาะ Shopee หรือ Lazada
-    var isShopee = currentUrl.indexOf("shopee") !== -1 || currentUrl.indexOf("shope.ee") !== -1;
+    var isShopee = currentUrl.indexOf("shopee") !== -1 || currentUrl.indexOf("shope.ee") !== -1 || currentUrl.indexOf("shp.ee") !== -1;
     var isLazada = currentUrl.indexOf("lazada") !== -1;
     if (!isShopee && !isLazada) return "";
     
-    // === วิธีที่ 1: ติดตาม Redirect แล้วแกะชื่อจาก URL ยาว ===
+    // === วิธีที่ 1: ติดตาม Redirect แล้วแกะชื่อจาก URL หรือ IDs ===
     var options = {
       'followRedirects': false,
-      'muteHttpExceptions': true
+      'muteHttpExceptions': true,
+      'headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      }
     };
     
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 6; i++) {
       var response = UrlFetchApp.fetch(currentUrl, options);
       var headers = response.getHeaders();
       var location = headers['Location'] || headers['location'];
@@ -61,33 +65,80 @@ function extractProductName(url) {
     }
     
     var decodedUrl = decodeURIComponent(currentUrl);
-    var productName = "";
     
-    // Shopee ลิงก์ยาว (มี -i. ในชื่อ)
+    // กรณีที่ 1: Shopee ลิงก์ยาวที่มี slug ชื่อสินค้า (มี -i.)
     if (decodedUrl.indexOf("-i.") !== -1) {
       var parts = decodedUrl.split("/");
       var lastSegment = parts[parts.length - 1]; 
-      productName = lastSegment.split("-i.")[0];
+      var rawSlug = lastSegment.split("-i.")[0];
+      if (rawSlug && rawSlug.length > 2 && rawSlug.indexOf("opaanlp") === -1) {
+        return rawSlug.replace(/-/g, " ").trim();
+      }
     } 
-    // Lazada (มี /products/)
-    else if (decodedUrl.indexOf("/products/") !== -1) {
-      var parts = decodedUrl.split("/");
-      var lastSegment = parts[parts.length - 1];
-      productName = lastSegment.split("-i")[0];
-    }
     
-    if (productName) {
-      return productName.replace(/-/g, " ").trim();
-    }
-    
-    // === วิธีที่ 2 (Fallback สำหรับลิงก์สั้น Shopee): ===
-    // ใช้ Facebookbot User-Agent เพื่อดึง og:title
-    // เพราะ Shopee จะส่ง HTML พร้อมชื่อสินค้าให้ social media bots!
+    // กรณีที่ 2: Shopee ลิงก์สั้นที่ redirect มาเป็น opaanlp/shopId/itemId หรือ product/shopId/itemId
     if (isShopee) {
-      return extractProductNameViaSocialBot(url.trim());
+      var shopId = null;
+      var itemId = null;
+      
+      var opaanlpMatch = decodedUrl.match(/opaanlp\/(\d+)\/(\d+)/i);
+      if (opaanlpMatch) {
+        shopId = opaanlpMatch[1];
+        itemId = opaanlpMatch[2];
+      }
+      if (!shopId) {
+        var prodMatch = decodedUrl.match(/product\/(\d+)\/(\d+)/i);
+        if (prodMatch) {
+          shopId = prodMatch[1];
+          itemId = prodMatch[2];
+        }
+      }
+      if (!shopId) {
+        var iMatch = decodedUrl.match(/-i\.(\d+)\.(\d+)/i);
+        if (iMatch) {
+          shopId = iMatch[1];
+          itemId = iMatch[2];
+        }
+      }
+      
+      // ถ้าพบ shopId และ itemId ให้ fetch หน้า Canonical Product Page ด้วย Desktop Chrome
+      if (shopId && itemId) {
+        var productPageUrl = "https://shopee.co.th/product/" + shopId + "/" + itemId;
+        var pageRes = UrlFetchApp.fetch(productPageUrl, {
+          'muteHttpExceptions': true,
+          'followRedirects': true,
+          'headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'th-TH,th;q=0.9,en;q=0.8'
+          }
+        });
+        var pageHtml = pageRes.getContentText();
+        var ogTitleMatch = pageHtml.match(/property=["']og:title["']\s+content=["']([^"']+)["']/i) || 
+                           pageHtml.match(/content=["']([^"']+)["']\s+property=["']og:title["']/i);
+        var titleTagMatch = pageHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+        var foundTitle = ogTitleMatch ? ogTitleMatch[1] : (titleTagMatch ? titleTagMatch[1] : "");
+        if (foundTitle) {
+          foundTitle = foundTitle.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
+          if (foundTitle && foundTitle !== "Shopee" && foundTitle.length > 2) {
+            return decodeHtmlEntities(foundTitle);
+          }
+        }
+      }
     }
     
-    return "";
+    // กรณีที่ 3: Lazada (มี /products/)
+    if (decodedUrl.indexOf("/products/") !== -1) {
+      var lzParts = decodedUrl.split("/");
+      var lzLastSegment = lzParts[lzParts.length - 1];
+      var lzName = lzLastSegment.split("-i")[0];
+      if (lzName) {
+        return lzName.replace(/-/g, " ").trim();
+      }
+    }
+    
+    // === วิธีที่ 3: Fallback Social Bot ===
+    return extractProductNameViaSocialBot(currentUrl) || extractProductNameViaSocialBot(url.trim());
   } catch (e) {
     return "";
   }
@@ -443,7 +494,7 @@ function doGet(e) {
     try {
       var url = e.parameter.url;
       // Domain whitelist to prevent SSRF
-      var allowedDomains = ["shopee.co.th", "shope.ee", "lazada.co.th", "s.shopee.co.th", "vt.tiktok.com", "www.tiktok.com", "www.instagram.com"];
+      var allowedDomains = ["shopee.co.th", "shope.ee", "shp.ee", "th.shp.ee", "lazada.co.th", "s.shopee.co.th", "vt.tiktok.com", "www.tiktok.com", "www.instagram.com"];
       var isAllowed = false;
       if (url) {
         for (var d = 0; d < allowedDomains.length; d++) {
@@ -466,7 +517,7 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({
-        status: "error",
+        status: "error", 
         message: err.toString()
       })).setMimeType(ContentService.MimeType.JSON);
     }
@@ -474,6 +525,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.11.0)"
+    message: "Record Affiliate API is running! (v3.12.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }

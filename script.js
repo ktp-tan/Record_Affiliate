@@ -99,6 +99,9 @@
                     const target = document.getElementById(btn.dataset.target);
                     target.value = text;
                     target.dispatchEvent(new Event('input'));
+                    if (btn.dataset.target === 'shopLink' && typeof handleShopLinkAutoExtract === 'function') {
+                        handleShopLinkAutoExtract();
+                    }
 
                     // Blur to hide keyboard after paste
                     target.blur();
@@ -190,25 +193,43 @@
         }
 
         // Auto-extract name when link is pasted/typed
-        dom.shopLink.addEventListener('input', () => {
-            const val = dom.shopLink.value.trim();
+        function handleShopLinkAutoExtract() {
+            const raw = dom.shopLink.value;
+            const val = raw ? raw.trim() : '';
             if (!val) return;
 
-            // 1. If it's Shopee/Lazada copy-paste text (containing space/newline/etc. - Shopee App copy)
+            // 1. If it's Shopee/Lazada copy-paste text (containing space/newline/brackets from App copy)
             if (val.includes(' ') || val.includes('[') || val.includes('\n')) {
                 const parsed = parsePastedProductInput(val);
-                if (parsed) {
+                if (parsed && parsed.url) {
                     dom.shopLink.value = parsed.url;
-                    dom.prodName.value = parsed.name;
                     updateSubmitButton();
-                    renderKeywordSuggestions(parsed.name); // Generate suggested keyword badges
-                    showToast('ดึงชื่อสินค้าและลิงก์เรียบร้อย!', 'success');
+
+                    if (parsed.name && parsed.name.length >= 2) {
+                        dom.prodName.value = parsed.name;
+                        renderKeywordSuggestions(parsed.name);
+                        showToast('ดึงชื่อสินค้าและลิงก์เรียบร้อย!', 'success');
+                        return;
+                    } else if (isValidProductUrl(parsed.url)) {
+                        fetchNameFromBackend(parsed.url);
+                        return;
+                    }
                 }
             }
+
             // 2. If it's a clean Shopee/Lazada URL, fetch from Apps Script backend dynamically
-            else if (isValidProductUrl(val)) {
+            if (isValidProductUrl(val)) {
                 fetchNameFromBackend(val);
             }
+        }
+
+        dom.shopLink.addEventListener('input', () => {
+            handleShopLinkAutoExtract();
+            updateSubmitButton();
+        });
+
+        dom.shopLink.addEventListener('paste', () => {
+            setTimeout(handleShopLinkAutoExtract, 30);
         });
 
         // Submit
@@ -516,9 +537,13 @@
             if (bracketMatch) {
                 name = bracketMatch[1];
             } else {
-                // Otherwise take everything before the URL
-                let beforeUrl = text.split(url)[0].trim();
-                if (beforeUrl) {
+                // Otherwise take text before the URL, or after the URL if before is empty
+                let rawCandidate = text.split(url)[0].trim();
+                if (!rawCandidate) {
+                    rawCandidate = text.split(url)[1] ? text.split(url)[1].trim() : "";
+                }
+
+                if (rawCandidate) {
                     // 1. Remove prefixes
                     const prefixes = [
                         /^ลองดู\s*/i,
@@ -529,7 +554,7 @@
                         /^พิกัด\s*/i
                     ];
                     for (const pref of prefixes) {
-                        beforeUrl = beforeUrl.replace(pref, "");
+                        rawCandidate = rawCandidate.replace(pref, "");
                     }
 
                     // 2. Cut off at suffixes
@@ -545,7 +570,7 @@
                         ' พิกัด'
                     ];
                     
-                    let cleanName = beforeUrl;
+                    let cleanName = rawCandidate;
                     for (const suff of suffixes) {
                         if (cleanName.includes(suff)) {
                             cleanName = cleanName.split(suff)[0];
@@ -681,13 +706,13 @@
                     dom.prodName.disabled = false;
                     updateSubmitButton();
                 });
-        }, 600); // 600ms debounce
+        }, 200); // 200ms debounce
     }
 
     function isValidProductUrl(str) {
         if (!str) return false;
         const s = str.trim().toLowerCase();
-        const hasDomain = s.includes('shopee.co.th') || s.includes('shope.ee') || s.includes('lazada.co.th') || s.includes('s.lazada.co.th');
+        const hasDomain = s.includes('shopee.co.th') || s.includes('shope.ee') || s.includes('shp.ee') || s.includes('lazada.co.th') || s.includes('s.lazada.co.th');
         return hasDomain && (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('www.') || s.indexOf('/') !== -1);
     }
 
