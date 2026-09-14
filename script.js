@@ -378,19 +378,24 @@
 
         // 1. Send data to Google Sheets in the background (Non-blocking)
         // ถ้า shopLink เป็นค่าว่าง หลังบ้าน (Apps Script) จะดึงลิงก์และชื่อสินค้าจากแถวล่าสุดของ Main Sheet ให้อัตโนมัติ
+        const postBody = JSON.stringify({
+            clipLink: clipLink,
+            shopLink: shopLink,
+            prodName: finalProdName,
+            handTools: isHandTools,
+            premSearch: state.isPremSearch,
+        });
+        // แปลงอักขระ non-ASCII (ภาษาไทย) เป็น Unicode escape เพื่อป้องกันปัญหา encoding ตอนส่งข้อมูล
+        const safeBody = postBody.replace(/[\u007F-\uFFFF]/g, (c) => {
+            return String.fromCharCode(92) + 'u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4);
+        });
         fetch(state.scriptUrl, {
             method: 'POST',
             mode: 'no-cors',
             headers: {
-                'Content-Type': 'text/plain',
+                'Content-Type': 'text/plain;charset=UTF-8',
             },
-            body: JSON.stringify({
-                clipLink: clipLink,
-                shopLink: shopLink,
-                prodName: finalProdName,
-                handTools: isHandTools,
-                premSearch: state.isPremSearch,
-            }),
+            body: safeBody,
         }).catch(error => {
             console.error('Background send error:', error);
             showToast('ส่งข้อมูลล้มเหลว กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
