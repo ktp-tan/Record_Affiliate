@@ -1,5 +1,5 @@
 // ============================================
-// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน High-Reliability v3.16.0)
+// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.17.0)
 // ============================================
 // วิธีติดตั้ง:
 // 1. เปิด Google Sheet "GodofAff Sheet"
@@ -475,6 +475,19 @@ function findRowByLink(values, tiktokLink, shopLink) {
   return -1;
 }
 
+// ฟังก์ชันย่อยสำหรับค้นหาแถวจากลิงก์คลิป (เช็คความซ้ำของคลิปแบบแม่นยำ)
+function findRowByExactLink(values, clipLink) {
+  if (!clipLink) return -1;
+  var target = clipLink.trim();
+  for (var i = 0; i < values.length; i++) {
+    var sheetClip = values[i][0] ? values[i][0].toString().trim() : "";
+    if (sheetClip && sheetClip === target) {
+      return i + 1; // ส่งคืนแถวแบบ 1-indexed
+    }
+  }
+  return -1;
+}
+
 // ============================================
 // ส่วนที่ 2: doPost - รับข้อมูลจาก Web App
 // ============================================
@@ -540,24 +553,36 @@ function doPost(e) {
         } catch (ex) {}
       }
       
-      // 1. บันทึกลง Main Sheet (ใช้ batch setValues เขียนทีเดียว 4 ช่อง ไม่เปลืองเวลา)
+      // 1. ตรวจจับความซ้ำใน Main Sheet ก่อนบันทึก (ป้องกันคลิปเดิมบันทึกซ้ำ)
       if (sheetMain) {
         var lastRowInMain = getLastRowOfColA(sheetMain);
-        var newRowMain = lastRowInMain + 1;
-        sheetMain.getRange(newRowMain, 1, 1, 4).setValues([[clipLink, shopLink, productName, itemType]]);
+        var mainValues = lastRowInMain > 0 ? sheetMain.getRange(1, 1, lastRowInMain, 1).getValues() : [];
+        var existingMainRow = clipLink ? findRowByExactLink(mainValues, clipLink) : -1;
+        
+        if (existingMainRow !== -1) {
+          // ถ้ามีลิงก์คลิปนี้อยู่แล้ว ให้อัปเดตแถวเดิมแทนการเพิ่มแถวใหม่
+          sheetMain.getRange(existingMainRow, 1, 1, 4).setValues([[clipLink, shopLink, productName, itemType]]);
+        } else {
+          // ถ้าเป็นคลิปใหม่ ให้เพิ่มแถวใหม่ต่อท้าย
+          var newRowMain = lastRowInMain + 1;
+          sheetMain.getRange(newRowMain, 1, 1, 4).setValues([[clipLink, shopLink, productName, itemType]]);
+        }
       }
       
-      // 2. บันทึกลง Sheet ที่สอง (Hand Tools หรือ Prem Sheet)
+      // 2. ตรวจจับความซ้ำและบันทึกลง Sheet ที่สอง (Hand Tools หรือ Prem Sheet)
       var secondSheetName = isHandTools ? "Hand Tools" : "Prem Sheet";
       var sheetSecond = ss.getSheetByName(secondSheetName);
       if (sheetSecond) {
         var lastRowInSecond = getLastRowOfColA(sheetSecond);
-        var newRowSecond = lastRowInSecond + 1;
-        sheetSecond.getRange(newRowSecond, 1, 1, 4).setValues([[clipLink, shopLink, productName, itemType]]);
+        var secondValues = lastRowInSecond > 0 ? sheetSecond.getRange(1, 1, lastRowInSecond, 1).getValues() : [];
+        var existingSecondRow = clipLink ? findRowByExactLink(secondValues, clipLink) : -1;
+        
+        var targetRowSecond = existingSecondRow !== -1 ? existingSecondRow : (lastRowInSecond + 1);
+        sheetSecond.getRange(targetRowSecond, 1, 1, 4).setValues([[clipLink, shopLink, productName, itemType]]);
         
         // ถ้าเปิดใช้งาน PS Mode และบันทึกลง Prem Sheet ให้ใส่คำว่า "PS" ในคอลัมน์ K (คอลัมน์ที่ 11)
         if (secondSheetName === "Prem Sheet" && isPremSearch) {
-          sheetSecond.getRange(newRowSecond, 11).setValue("PS");
+          sheetSecond.getRange(targetRowSecond, 11).setValue("PS");
         }
       }
       
@@ -625,6 +650,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.16.0)"
+    message: "Record Affiliate API is running! (v3.17.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
