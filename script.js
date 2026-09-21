@@ -376,7 +376,7 @@
             finalProdName = prodName + '|||' + extraFlags.join('|||');
         }
 
-        // 1. Send data to Google Sheets in the background (Non-blocking)
+        // 1. Send data to Google Sheets in the background with auto-retry
         // ถ้า shopLink เป็นค่าว่าง หลังบ้าน (Apps Script) จะดึงลิงก์และชื่อสินค้าจากแถวล่าสุดของ Main Sheet ให้อัตโนมัติ
         const postBody = JSON.stringify({
             clipLink: clipLink,
@@ -389,17 +389,28 @@
         const safeBody = postBody.replace(/[\u007F-\uFFFF]/g, (c) => {
             return String.fromCharCode(92) + 'u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4);
         });
-        fetch(state.scriptUrl, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'text/plain;charset=UTF-8',
-            },
-            body: safeBody,
-        }).catch(error => {
-            console.error('Background send error:', error);
-            showToast('ส่งข้อมูลล้มเหลว กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
-        });
+
+        function sendWithRetry(payload, retriesLeft = 2) {
+            return fetch(state.scriptUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                keepalive: true,
+                headers: {
+                    'Content-Type': 'text/plain;charset=UTF-8',
+                },
+                body: payload,
+            }).catch(error => {
+                if (retriesLeft > 0) {
+                    console.warn(`Send failed, retrying in 1.5s... (${retriesLeft} retries left)`);
+                    setTimeout(() => sendWithRetry(payload, retriesLeft - 1), 1500);
+                } else {
+                    console.error('All send retries failed:', error);
+                    showToast('ส่งข้อมูลไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
+                }
+            });
+        }
+
+        sendWithRetry(safeBody);
 
         // 2. Immediate UI response (No waiting!)
         dom.submitBtn.classList.add('success');
