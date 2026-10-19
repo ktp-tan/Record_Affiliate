@@ -678,7 +678,6 @@
     }
 
     // --- Dynamic Name Fetching Helpers ---
-    const GODOFAFF_SCRAPER_URL = 'https://godofaff.com/api/scrape-product';
     const WORKER_SCRAPER_URL = 'https://9d9f405b-kaneskn-worker.p2scalworkhost.workers.dev/api/scrape-product';
     let fetchTimeout = null;
     let fetchAbortController = null;
@@ -719,36 +718,38 @@
             fetchAbortController = new AbortController();
             const signal = fetchAbortController.signal;
 
-            // วิธีที่ 1: เรียก godofaff.com Scraper API โดยตรง (รองรับ Shopee shortlink s.shopee.co.th รวดเร็วและแม่นยำ)
-            try {
-                const gRes = await fetch(GODOFAFF_SCRAPER_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ productUrl: cleanUrl }),
-                    signal: signal
-                });
-                if (gRes.ok) {
-                    const gData = await gRes.json();
-                    if (gData && gData.success && gData.title) {
-                        const title = sanitizeProductTitle(gData.title);
-                        if (title && title !== 'Shopee' && title !== 'Lazada' && title.length > 2) {
-                            applyFetchedProductName(title);
-                            return;
+            // ตรวจหา shopId และ itemId โดยตรงจากลิงก์ (เช่น shopee.co.th/product/123/456 หรือ opaanlp/123/456 หรือ -i.123.456)
+            let idMatch = cleanUrl.match(/opaanlp\/(\d+)\/(\d+)/i) ||
+                          cleanUrl.match(/product\/(\d+)\/(\d+)/i) ||
+                          cleanUrl.match(/-i\.(\d+)\.(\d+)/i) ||
+                          cleanUrl.match(/\/(\d{5,})\/(\d{5,})/);
+
+            const isShopeeShortlink = /s\.shopee\.co\.th|shp\.ee|shope\.ee/i.test(cleanUrl);
+
+            // วิธีที่ 1: ถ้าเป็นลิงก์สั้นของ Shopee ให้ Unshorten ผ่าน API สาธารณะก่อนเพื่อแกะ shopId และ itemId
+            if (!idMatch && isShopeeShortlink) {
+                try {
+                    const unshortenRes = await fetch(`https://unshorten.me/json/${encodeURIComponent(cleanUrl)}`, {
+                        signal: signal
+                    });
+                    if (unshortenRes.ok) {
+                        const uData = await unshortenRes.json();
+                        if (uData && uData.success && uData.resolved_url) {
+                            const resUrl = decodeURIComponent(uData.resolved_url);
+                            idMatch = resUrl.match(/opaanlp\/(\d+)\/(\d+)/i) ||
+                                      resUrl.match(/product\/(\d+)\/(\d+)/i) ||
+                                      resUrl.match(/-i\.(\d+)\.(\d+)/i) ||
+                                      resUrl.match(/\/(\d{5,})\/(\d{5,})/);
                         }
                     }
+                } catch (e) {
+                    if (e.name === 'AbortError') return;
+                    console.warn('Frontend unshortener failed, falling back:', e);
                 }
-            } catch (err) {
-                if (err.name === 'AbortError') return;
-                console.warn('Godofaff scraper failed, trying fallback worker/Apps Script:', err);
             }
 
-            // วิธีที่ 2: ถ้าเป็น Shopee ที่มี ShopID / ItemID ให้ลอง Cloudflare Worker
-            const idMatch = cleanUrl.match(/opaanlp\/(\d+)\/(\d+)/i) ||
-                            cleanUrl.match(/product\/(\d+)\/(\d+)/i) ||
-                            cleanUrl.match(/-i\.(\d+)\.(\d+)/i) ||
-                            cleanUrl.match(/\/(\d{5,})\/(\d{5,})/);
-
-            if (idMatch && cleanUrl.includes('shopee')) {
+            // วิธีที่ 2: ถ้ามี shopId และ itemId ให้เรียก Worker Scraper ทันที (แม่นยำ 100% รวดเร็ว และไม่มีปัญหา CORS)
+            if (idMatch && (cleanUrl.includes('shopee') || isShopeeShortlink)) {
                 const canonicalUrl = `https://shopee.co.th/product/${idMatch[1]}/${idMatch[2]}`;
                 try {
                     const wRes = await fetch(WORKER_SCRAPER_URL, {

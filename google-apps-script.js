@@ -1,5 +1,5 @@
 // ============================================
-// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.17.0)
+// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.19.0)
 // ============================================
 // วิธีติดตั้ง:
 // 1. เปิด Google Sheet "GodofAff Sheet"
@@ -20,7 +20,6 @@
 var SPREADSHEET_ID = ""; 
 
 // Scraper API Services
-var GODOFAFF_SCRAPER_URL = "https://godofaff.com/api/scrape-product";
 var WORKER_SCRAPER_URL = "https://9d9f405b-kaneskn-worker.p2scalworkhost.workers.dev/api/scrape-product"; 
 
 // ฟังก์ชันหาแถวสุดท้ายที่มีข้อมูลจริงในคอลัมน์ A (ป้องกัน Checkbox เปล่าดันข้อมูลลงล่าง)
@@ -49,27 +48,26 @@ function extractProductName(url, debugLogs) {
     var isLazada = currentUrl.indexOf("lazada") !== -1;
     if (!isShopee && !isLazada) return "";
 
-    // === วิธีที่ 0: ดึงผ่าน godofaff Scraper API โดยตรง (รองรับ Shopee shortlink s.shopee.co.th รวดเร็วและแม่นยำ) ===
-    try {
-      var godofaffRes = UrlFetchApp.fetch(GODOFAFF_SCRAPER_URL, {
-        'method': 'post',
-        'contentType': 'application/json',
-        'muteHttpExceptions': true,
-        'payload': JSON.stringify({ productUrl: currentUrl }),
-        'headers': { 'timeout': '3000' }
-      });
-      if (godofaffRes.getResponseCode() === 200) {
-        var gData = JSON.parse(godofaffRes.getContentText());
-        if (gData && gData.success && gData.title) {
-          var gTitle = gData.title.replace(/\s*\|\s*(Shopee|Lazada).*$/i, '').trim();
-          if (gTitle && gTitle !== "Shopee" && gTitle !== "Lazada" && gTitle.length > 2) {
-            debugLogs.push("Extracted via godofaff scraper: " + gTitle);
-            return decodeHtmlEntities(gTitle);
+    // === วิธีที่ 0: ถ้าเป็น Shopee shortlink (s.shopee.co.th) ให้ unshorten ก่อน แล้วแกะ shopId/itemId ===
+    var isShopeeShortlink = currentUrl.indexOf("s.shopee.co.th") !== -1 ||
+                            currentUrl.indexOf("shp.ee") !== -1 ||
+                            currentUrl.indexOf("shope.ee") !== -1;
+    if (isShopee && isShopeeShortlink) {
+      try {
+        var unshortenReq = UrlFetchApp.fetch(
+          "https://unshorten.me/json/" + encodeURIComponent(currentUrl),
+          { 'muteHttpExceptions': true, 'followRedirects': true }
+        );
+        if (unshortenReq.getResponseCode() === 200) {
+          var uData = JSON.parse(unshortenReq.getContentText());
+          if (uData && uData.success && uData.resolved_url) {
+            debugLogs.push("Unshortened to: " + uData.resolved_url.substring(0, 100));
+            currentUrl = uData.resolved_url;
           }
         }
+      } catch (ue) {
+        debugLogs.push("Unshorten Error: " + ue.toString());
       }
-    } catch (ge) {
-      debugLogs.push("Godofaff Scrape Error: " + ge.toString());
     }
     
     // === วิธีที่ 1: ติดตาม Redirect แล้วแกะชื่อจาก URL หรือ IDs ===
@@ -650,6 +648,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.17.0)"
+    message: "Record Affiliate API is running! (v3.19.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
