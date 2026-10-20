@@ -1,5 +1,5 @@
 // ============================================
-// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.19.0)
+// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.21.0)
 // ============================================
 // วิธีติดตั้ง:
 // 1. เปิด Google Sheet "GodofAff Sheet"
@@ -19,8 +19,8 @@
 // ตัวอย่าง URL: https://docs.google.com/spreadsheets/d/ใส่_ID_ตรงนี้/edit
 var SPREADSHEET_ID = ""; 
 
-// Scraper API Services
-var WORKER_SCRAPER_URL = "https://9d9f405b-kaneskn-worker.p2scalworkhost.workers.dev/api/scrape-product"; 
+// Jina Reader: ให้ Jina ไปเปิดหน้า Shopee แทน (Shopee บล็อก IP ของ Google/Cloudflare แต่ไม่บล็อก Jina เมื่อใช้ WhatsApp UA)
+var JINA_READER_URL = "https://r.jina.ai/";
 
 // ฟังก์ชันหาแถวสุดท้ายที่มีข้อมูลจริงในคอลัมน์ A (ป้องกัน Checkbox เปล่าดันข้อมูลลงล่าง)
 function getLastRowOfColA(sheet) {
@@ -48,29 +48,8 @@ function extractProductName(url, debugLogs) {
     var isLazada = currentUrl.indexOf("lazada") !== -1;
     if (!isShopee && !isLazada) return "";
 
-    // === วิธีที่ 0: ถ้าเป็น Shopee shortlink (s.shopee.co.th) ให้ unshorten ก่อน แล้วแกะ shopId/itemId ===
-    var isShopeeShortlink = currentUrl.indexOf("s.shopee.co.th") !== -1 ||
-                            currentUrl.indexOf("shp.ee") !== -1 ||
-                            currentUrl.indexOf("shope.ee") !== -1;
-    if (isShopee && isShopeeShortlink) {
-      try {
-        var unshortenReq = UrlFetchApp.fetch(
-          "https://unshorten.me/json/" + encodeURIComponent(currentUrl),
-          { 'muteHttpExceptions': true, 'followRedirects': true }
-        );
-        if (unshortenReq.getResponseCode() === 200) {
-          var uData = JSON.parse(unshortenReq.getContentText());
-          if (uData && uData.success && uData.resolved_url) {
-            debugLogs.push("Unshortened to: " + uData.resolved_url.substring(0, 100));
-            currentUrl = uData.resolved_url;
-          }
-        }
-      } catch (ue) {
-        debugLogs.push("Unshorten Error: " + ue.toString());
-      }
-    }
-    
     // === วิธีที่ 1: ติดตาม Redirect แล้วแกะชื่อจาก URL หรือ IDs ===
+    // (ลิงก์สั้น s.shopee.co.th ตอบ 301 พร้อม Location ที่มี opaanlp/shopId/itemId ให้ IP ของ Google ได้ปกติ)
     var options = {
       'followRedirects': false,
       'muteHttpExceptions': true,
@@ -81,6 +60,9 @@ function extractProductName(url, debugLogs) {
     };
     
     for (var i = 0; i < 6; i++) {
+      // ถ้า URL มี shopId/itemId แล้วให้หยุด (ไม่งั้นจะไปหยิบ href ของไฟล์ CSS ในหน้าแล้ว ID หาย)
+      if (/opaanlp\/\d+\/\d+|product\/\d+\/\d+|-i\.\d+\.\d+/i.test(currentUrl)) break;
+
       var response = UrlFetchApp.fetch(currentUrl, options);
       var code = response.getResponseCode();
       var headers = response.getHeaders();
@@ -168,53 +150,9 @@ function extractProductName(url, debugLogs) {
       if (shopId && itemId) {
         var productPageUrl = "https://shopee.co.th/product/" + shopId + "/" + itemId;
         
-        // 2.1 ดึงผ่าน Cloudflare Worker Scraper จากโปรเจกต์ AutopostTool (ได้ผล 100% ไม่โดนบล็อก)
-        try {
-          var workerRes = UrlFetchApp.fetch(WORKER_SCRAPER_URL, {
-            'method': 'post',
-            'contentType': 'application/json',
-            'muteHttpExceptions': true,
-            'payload': JSON.stringify({ productUrl: productPageUrl })
-          });
-          var wCode = workerRes.getResponseCode();
-          debugLogs.push("Worker response status: " + wCode);
-          if (wCode === 200) {
-            var workerData = JSON.parse(workerRes.getContentText());
-            debugLogs.push("Worker success: " + (workerData ? workerData.success : false) + ", title: " + (workerData ? workerData.title : ""));
-            if (workerData && workerData.success && workerData.title) {
-              var title = workerData.title.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
-              if (title && title !== "Shopee" && title.length > 2) {
-                return decodeHtmlEntities(title);
-              }
-            }
-          }
-        } catch (we) {
-          debugLogs.push("Worker Scrape Error: " + we.toString());
-        }
-        
-        // 2.2 Fallback: Fetch หน้า Canonical Product Page ด้วย Desktop Chrome
-        try {
-          var pageRes = UrlFetchApp.fetch(productPageUrl, {
-            'muteHttpExceptions': true,
-            'followRedirects': true,
-            'headers': {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'th-TH,th;q=0.9,en;q=0.8'
-            }
-          });
-          var pageHtml = pageRes.getContentText();
-          var ogTitleMatch = pageHtml.match(/property=["']og:title["']\s+content=["']([^"']+)["']/i) || 
-                             pageHtml.match(/content=["']([^"']+)["']\s+property=["']og:title["']/i);
-          var titleTagMatch = pageHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-          var foundTitle = ogTitleMatch ? ogTitleMatch[1] : (titleTagMatch ? titleTagMatch[1] : "");
-          if (foundTitle) {
-            foundTitle = foundTitle.replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, "").trim();
-            if (foundTitle && foundTitle !== "Shopee" && foundTitle.length > 2) {
-              return decodeHtmlEntities(foundTitle);
-            }
-          }
-        } catch (pe) {}
+        // 2.1 ดึงผ่าน Jina Reader ด้วยหน้า Product (ได้ชื่อเต็ม ไม่โดน Shopee บล็อก)
+        var jinaTitle = fetchTitleViaJina(productPageUrl, debugLogs);
+        if (jinaTitle) return jinaTitle;
       }
     }
     
@@ -228,21 +166,60 @@ function extractProductName(url, debugLogs) {
       }
     }
     
-    // === วิธีที่ 3: Fallback Social Bot ===
-    return extractProductNameViaSocialBot(currentUrl) || extractProductNameViaSocialBot(url.trim());
+    // === วิธีที่ 3: Fallback ให้ Jina เปิดลิงก์เดิมตรงๆ (ลิงก์สั้นจะได้ชื่อที่ถูกตัดท้าย) แล้วค่อยลอง Social Bot ===
+    return fetchTitleViaJina(url.trim(), debugLogs) || extractProductNameViaSocialBot(currentUrl);
   } catch (e) {
     return "";
   }
 }
 
-// ฟังก์ชันดึงชื่อสินค้าผ่าน Social Bot User-Agent (Facebook/WhatsApp)
+// ฟังก์ชันดึงชื่อสินค้าผ่าน Jina Reader (r.jina.ai) โดยให้ Jina เปิดหน้า Shopee ด้วย WhatsApp User-Agent
+// หมายเหตุ: Shopee บล็อก IP ของ Google/Cloudflare (ได้ชื่อกลางๆ "Shopee Thailand | ...") แต่ไม่บล็อก Jina
+// ลิงก์สั้นจะได้ชื่อที่ถูกตัดท้าย ส่วนหน้า /product/shopId/itemId จะได้ชื่อเต็ม
+function fetchTitleViaJina(url, debugLogs) {
+  debugLogs = debugLogs || [];
+  try {
+    var res = UrlFetchApp.fetch(JINA_READER_URL + url, {
+      'muteHttpExceptions': true,
+      'headers': {
+        'Accept': 'application/json',
+        'X-User-Agent': 'WhatsApp/2.23.20.0',
+        'X-Return-Format': 'text'
+      }
+    });
+    var code = res.getResponseCode();
+    debugLogs.push("Jina status: " + code + " for " + url.substring(0, 80));
+    if (code !== 200) return "";
+
+    var json = JSON.parse(res.getContentText());
+    var title = cleanShopeeTitle(json && json.data && json.data.title);
+    debugLogs.push("Jina title: " + title);
+    return title;
+  } catch (e) {
+    debugLogs.push("Jina error: " + e.toString());
+    return "";
+  }
+}
+
+// ฟังก์ชันล้างชื่อสินค้า: ตัด "| Shopee Thailand" และ "..." ท้ายชื่อ, ทิ้งชื่อกลางๆ ของ Shopee
+function cleanShopeeTitle(raw) {
+  if (!raw) return "";
+  var title = decodeHtmlEntities(String(raw))
+    .replace(/\s*\|\s*Shopee\s*Thailand.*$/i, "")
+    .replace(/\s*(\.\.\.|…)\s*$/, "")
+    .trim();
+  if (!title || /^Shopee/i.test(title) || title.length <= 2) return "";
+  return title;
+}
+
+// ฟังก์ชันดึงชื่อสินค้าผ่าน Social Bot User-Agent (WhatsApp — facebookexternalhit โดน Shopee บล็อก 403 แล้ว)
 function extractProductNameViaSocialBot(url) {
   try {
     var response = UrlFetchApp.fetch(url, {
       'muteHttpExceptions': true,
       'followRedirects': true,
       'headers': {
-        'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+        'User-Agent': 'WhatsApp/2.23.20.0',
         'Accept': 'text/html'
       }
     });
@@ -648,6 +625,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.19.0)"
+    message: "Record Affiliate API is running! (v3.21.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }

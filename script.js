@@ -430,7 +430,8 @@
             showToast('บันทึกแล้ว! (หลังบ้านดึงลิงก์ Shopee ล่าสุดให้)', 'success');
         }
 
-        // Clear inputs instantly
+        // Clear inputs instantly (ยกเลิกการดึงชื่อที่ค้างอยู่ ไม่ให้ชื่อเก่าเด้งกลับมาในฟอร์มใหม่)
+        cancelNameFetch();
         dom.clipLink.value = '';
         dom.shopLink.value = '';
         dom.prodName.value = '';
@@ -678,7 +679,8 @@
     }
 
     // --- Dynamic Name Fetching Helpers ---
-    const WORKER_SCRAPER_URL = 'https://9d9f405b-kaneskn-worker.p2scalworkhost.workers.dev/api/scrape-product';
+    // Shopee บล็อก IP ของเซิร์ฟเวอร์ (Google/Cloudflare) จึงให้ Jina Reader เปิดหน้าแทนด้วย WhatsApp User-Agent
+    const JINA_READER_URL = 'https://r.jina.ai/';
     let fetchTimeout = null;
     let fetchAbortController = null;
 
@@ -686,7 +688,7 @@
         if (!raw) return '';
         return raw
             .replace(/\s*\|\s*(Shopee|Lazada).*$/i, '')
-            .replace(/\s*\|\s*Shopee\s*Thailand\s*/gi, '')
+            .replace(/\s*(\.\.\.|…)\s*$/, '')
             .trim();
     }
 
@@ -697,6 +699,31 @@
         showToast('ดึงชื่อสินค้าสำเร็จ!', 'success');
         dom.prodName.disabled = false;
         updateSubmitButton();
+    }
+
+    function cancelNameFetch() {
+        if (fetchTimeout) clearTimeout(fetchTimeout);
+        if (fetchAbortController) fetchAbortController.abort();
+        dom.prodName.disabled = false;
+        dom.prodName.placeholder = 'ชื่อสินค้า เช่น ค้อน, ที่แงะหิน...';
+    }
+
+    // คืนค่า { title, truncated } — ลิงก์สั้นจะได้ชื่อที่ Shopee ตัดท้ายด้วย "..."
+    async function fetchTitleViaJina(url, signal) {
+        const res = await fetch(JINA_READER_URL + url, {
+            headers: {
+                'Accept': 'application/json',
+                'X-User-Agent': 'WhatsApp/2.23.20.0',
+                'X-Return-Format': 'text',
+            },
+            signal: signal,
+        });
+        if (!res.ok) return null;
+        const json = await res.json();
+        const raw = (json && json.data && json.data.title) || '';
+        const title = sanitizeProductTitle(raw);
+        if (!title || /^Shopee/i.test(title) || title.length <= 2) return null;
+        return { title, truncated: /(\.\.\.|…)\s*$/.test(raw) };
     }
 
     function fetchNameFromBackend(url) {
@@ -712,71 +739,56 @@
 
         // Debounce to prevent multiple API requests
         if (fetchTimeout) clearTimeout(fetchTimeout);
-        
+
         fetchTimeout = setTimeout(async () => {
             if (fetchAbortController) fetchAbortController.abort();
             fetchAbortController = new AbortController();
             const signal = fetchAbortController.signal;
 
             // ตรวจหา shopId และ itemId โดยตรงจากลิงก์ (เช่น shopee.co.th/product/123/456 หรือ opaanlp/123/456 หรือ -i.123.456)
-            let idMatch = cleanUrl.match(/opaanlp\/(\d+)\/(\d+)/i) ||
-                          cleanUrl.match(/product\/(\d+)\/(\d+)/i) ||
-                          cleanUrl.match(/-i\.(\d+)\.(\d+)/i) ||
-                          cleanUrl.match(/\/(\d{5,})\/(\d{5,})/);
+            const idMatch = cleanUrl.match(/opaanlp\/(\d+)\/(\d+)/i) ||
+                            cleanUrl.match(/product\/(\d+)\/(\d+)/i) ||
+                            cleanUrl.match(/-i\.(\d+)\.(\d+)/i);
+            const isShopee = /shopee|shp\.ee|shope\.ee/i.test(cleanUrl);
+            const jinaTarget = idMatch && isShopee
+                ? `https://shopee.co.th/product/${idMatch[1]}/${idMatch[2]}`
+                : cleanUrl;
 
-            const isShopeeShortlink = /s\.shopee\.co\.th|shp\.ee|shope\.ee/i.test(cleanUrl);
-
-            // วิธีที่ 1: ถ้าเป็นลิงก์สั้นของ Shopee ให้ Unshorten ผ่าน API สาธารณะก่อนเพื่อแกะ shopId และ itemId
-            if (!idMatch && isShopeeShortlink) {
-                try {
-                    const unshortenRes = await fetch(`https://unshorten.me/json/${encodeURIComponent(cleanUrl)}`, {
-                        signal: signal
-                    });
-                    if (unshortenRes.ok) {
-                        const uData = await unshortenRes.json();
-                        if (uData && uData.success && uData.resolved_url) {
-                            const resUrl = decodeURIComponent(uData.resolved_url);
-                            idMatch = resUrl.match(/opaanlp\/(\d+)\/(\d+)/i) ||
-                                      resUrl.match(/product\/(\d+)\/(\d+)/i) ||
-                                      resUrl.match(/-i\.(\d+)\.(\d+)/i) ||
-                                      resUrl.match(/\/(\d{5,})\/(\d{5,})/);
-                        }
-                    }
-                } catch (e) {
-                    if (e.name === 'AbortError') return;
-                    console.warn('Frontend unshortener failed, falling back:', e);
+            // วิธีที่ 1: Jina Reader (เร็ว ~1-3 วินาที)
+            try {
+                const result = await fetchTitleViaJina(jinaTarget, signal);
+                if (result) {
+                    applyFetchedProductName(result.title);
+                    // ลิงก์สั้นได้ชื่อถูกตัดท้าย → ให้ Apps Script แกะ ID จาก redirect แล้วขอชื่อเต็มมาแทนแบบเงียบๆ
+                    if (result.truncated && isShopee) upgradeToFullName(cleanUrl, result.title, signal);
+                    return;
                 }
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                console.warn('Jina reader failed:', err);
             }
 
-            // วิธีที่ 2: ถ้ามี shopId และ itemId ให้เรียก Worker Scraper ทันที (แม่นยำ 100% รวดเร็ว และไม่มีปัญหา CORS)
-            if (idMatch && (cleanUrl.includes('shopee') || isShopeeShortlink)) {
-                const canonicalUrl = `https://shopee.co.th/product/${idMatch[1]}/${idMatch[2]}`;
-                try {
-                    const wRes = await fetch(WORKER_SCRAPER_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ productUrl: canonicalUrl }),
-                        signal: signal
-                    });
-                    if (wRes.ok) {
-                        const wData = await wRes.json();
-                        if (wData && wData.success && wData.title) {
-                            const title = sanitizeProductTitle(wData.title);
-                            if (title && title !== 'Shopee' && title.length > 2) {
-                                applyFetchedProductName(title);
-                                return;
-                            }
-                        }
-                    }
-                } catch (err) {
-                    if (err.name === 'AbortError') return;
-                    console.warn('Worker scraper failed:', err);
-                }
-            }
-
-            // วิธีที่ 3: Fallback เรียก Google Apps Script backend
+            // วิธีที่ 2: Fallback เรียก Google Apps Script backend
             callBackendExtract(cleanUrl);
         }, 150);
+    }
+
+    function upgradeToFullName(cleanUrl, shortTitle, signal) {
+        if (!state.scriptUrl) return;
+        const fetchUrl = `${state.scriptUrl}?action=extractName&url=${encodeURIComponent(cleanUrl)}`;
+        fetch(fetchUrl, { signal: signal })
+            .then(res => res.json())
+            .then(data => {
+                const full = data && data.status === 'success' ? data.productName : '';
+                // แทนที่เฉพาะเมื่อผู้ใช้ยังไม่ได้แก้ชื่อเอง และได้ชื่อที่ยาวกว่าจริง
+                if (full && full.length > shortTitle.length && dom.prodName.value === shortTitle) {
+                    dom.prodName.value = full;
+                    renderKeywordSuggestions(full);
+                }
+            })
+            .catch(err => {
+                if (err.name !== 'AbortError') console.warn('Full name upgrade failed:', err);
+            });
     }
 
     function callBackendExtract(cleanUrl) {
