@@ -709,12 +709,14 @@
     }
 
     // คืนค่า { title, truncated } — ลิงก์สั้นจะได้ชื่อที่ Shopee ตัดท้ายด้วย "..."
+    // ใช้ X-Engine: direct (ไม่เปิดเบราว์เซอร์) เร็ว ~1-2 วิ แทน ~16 วิ เมื่อ Jina ยังไม่มี cache
     async function fetchTitleViaJina(url, signal) {
         const res = await fetch(JINA_READER_URL + url, {
             headers: {
                 'Accept': 'application/json',
                 'X-User-Agent': 'WhatsApp/2.23.20.0',
                 'X-Return-Format': 'text',
+                'X-Engine': 'direct',
             },
             signal: signal,
         });
@@ -754,18 +756,21 @@
                 ? `https://shopee.co.th/product/${idMatch[1]}/${idMatch[2]}`
                 : cleanUrl;
 
-            // วิธีที่ 1: Jina Reader (เร็ว ~1-3 วินาที)
-            try {
-                const result = await fetchTitleViaJina(jinaTarget, signal);
-                if (result) {
-                    applyFetchedProductName(result.title);
-                    // ลิงก์สั้นได้ชื่อถูกตัดท้าย → ให้ Apps Script แกะ ID จาก redirect แล้วขอชื่อเต็มมาแทนแบบเงียบๆ
-                    if (result.truncated && isShopee) upgradeToFullName(cleanUrl, result.title, signal);
-                    return;
+            // วิธีที่ 1: Jina Reader (เร็ว ~1-2 วินาที) — หน้า Product โหมด direct สำเร็จประมาณครึ่งหนึ่ง จึงลอง 2 ครั้ง
+            const attempts = idMatch && isShopee ? 2 : 1;
+            for (let i = 0; i < attempts; i++) {
+                try {
+                    const result = await fetchTitleViaJina(jinaTarget, signal);
+                    if (result) {
+                        applyFetchedProductName(result.title);
+                        // ลิงก์สั้นได้ชื่อถูกตัดท้าย → ให้ Apps Script แกะ ID จาก redirect แล้วขอชื่อเต็มมาแทนแบบเงียบๆ
+                        if (result.truncated && isShopee) upgradeToFullName(cleanUrl, result.title, signal);
+                        return;
+                    }
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    console.warn('Jina reader failed:', err);
                 }
-            } catch (err) {
-                if (err.name === 'AbortError') return;
-                console.warn('Jina reader failed:', err);
             }
 
             // วิธีที่ 2: Fallback เรียก Google Apps Script backend

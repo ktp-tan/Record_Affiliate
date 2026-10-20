@@ -1,5 +1,5 @@
 // ============================================
-// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.21.0)
+// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.22.0)
 // ============================================
 // วิธีติดตั้ง:
 // 1. เปิด Google Sheet "GodofAff Sheet"
@@ -151,8 +151,13 @@ function extractProductName(url, debugLogs) {
         var productPageUrl = "https://shopee.co.th/product/" + shopId + "/" + itemId;
         
         // 2.1 ดึงผ่าน Jina Reader ด้วยหน้า Product (ได้ชื่อเต็ม ไม่โดน Shopee บล็อก)
-        var jinaTitle = fetchTitleViaJina(productPageUrl, debugLogs);
-        if (jinaTitle) return jinaTitle;
+        // โหมด direct เร็ว (~2 วิ) แต่สำเร็จประมาณครึ่งหนึ่ง จึงลองซ้ำ 3 ครั้งก่อนใช้โหมดเบราว์เซอร์ (~16 วิ แต่ชัวร์)
+        for (var attempt = 0; attempt < 3; attempt++) {
+          var jinaTitle = fetchTitleViaJina(productPageUrl, debugLogs, "direct");
+          if (jinaTitle) return jinaTitle;
+        }
+        var jinaBrowserTitle = fetchTitleViaJina(productPageUrl, debugLogs);
+        if (jinaBrowserTitle) return jinaBrowserTitle;
       }
     }
     
@@ -167,7 +172,7 @@ function extractProductName(url, debugLogs) {
     }
     
     // === วิธีที่ 3: Fallback ให้ Jina เปิดลิงก์เดิมตรงๆ (ลิงก์สั้นจะได้ชื่อที่ถูกตัดท้าย) แล้วค่อยลอง Social Bot ===
-    return fetchTitleViaJina(url.trim(), debugLogs) || extractProductNameViaSocialBot(currentUrl);
+    return fetchTitleViaJina(url.trim(), debugLogs, "direct") || extractProductNameViaSocialBot(currentUrl);
   } catch (e) {
     return "";
   }
@@ -176,19 +181,22 @@ function extractProductName(url, debugLogs) {
 // ฟังก์ชันดึงชื่อสินค้าผ่าน Jina Reader (r.jina.ai) โดยให้ Jina เปิดหน้า Shopee ด้วย WhatsApp User-Agent
 // หมายเหตุ: Shopee บล็อก IP ของ Google/Cloudflare (ได้ชื่อกลางๆ "Shopee Thailand | ...") แต่ไม่บล็อก Jina
 // ลิงก์สั้นจะได้ชื่อที่ถูกตัดท้าย ส่วนหน้า /product/shopId/itemId จะได้ชื่อเต็ม
-function fetchTitleViaJina(url, debugLogs) {
+// engine "direct" = ไม่เปิดเบราว์เซอร์ (~1-2 วิ), ไม่ระบุ = เปิดเบราว์เซอร์จริง (~16 วิ เมื่อไม่มี cache)
+function fetchTitleViaJina(url, debugLogs, engine) {
   debugLogs = debugLogs || [];
   try {
+    var headers = {
+      'Accept': 'application/json',
+      'X-User-Agent': 'WhatsApp/2.23.20.0',
+      'X-Return-Format': 'text'
+    };
+    if (engine) headers['X-Engine'] = engine;
     var res = UrlFetchApp.fetch(JINA_READER_URL + url, {
       'muteHttpExceptions': true,
-      'headers': {
-        'Accept': 'application/json',
-        'X-User-Agent': 'WhatsApp/2.23.20.0',
-        'X-Return-Format': 'text'
-      }
+      'headers': headers
     });
     var code = res.getResponseCode();
-    debugLogs.push("Jina status: " + code + " for " + url.substring(0, 80));
+    debugLogs.push("Jina status: " + code + " (" + (engine || "browser") + ") for " + url.substring(0, 80));
     if (code !== 200) return "";
 
     var json = JSON.parse(res.getContentText());
@@ -625,6 +633,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.21.0)"
+    message: "Record Affiliate API is running! (v3.22.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
