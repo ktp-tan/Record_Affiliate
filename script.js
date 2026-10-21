@@ -52,6 +52,31 @@
     // --- Detect Mobile ---
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 640;
 
+    // --- Haptic Feedback ---
+    // Android ใช้ navigator.vibrate ได้ตรงๆ แต่ iPhone (Safari) ไม่รองรับ
+    // จึงคลิก <input type="checkbox" switch> ที่ซ่อนไว้แทน ซึ่ง iOS 18+ จะสั่นให้ทุกครั้งที่สวิตช์เปลี่ยน
+    const iosHapticLabel = (() => {
+        if (navigator.vibrate) return null;
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.setAttribute('switch', '');
+        label.appendChild(input);
+        label.setAttribute('aria-hidden', 'true');
+        label.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;';
+        document.body.appendChild(label);
+        return label;
+    })();
+
+    function haptic(pattern) {
+        if (navigator.vibrate) {
+            navigator.vibrate(pattern);
+        } else if (iosHapticLabel) {
+            // ต้องเรียกภายใน event ที่ผู้ใช้แตะเท่านั้น iOS ถึงจะสั่น
+            iosHapticLabel.click();
+        }
+    }
+
     // --- Background Particles ---
     function createParticles() {
         const colors = [
@@ -107,7 +132,7 @@
                     target.blur();
 
                     // Haptic feedback on mobile
-                    if (navigator.vibrate) navigator.vibrate(30);
+                    haptic(30);
 
                     // Quick feedback animation
                     btn.style.color = 'var(--success)';
@@ -164,7 +189,7 @@
                     }
                     
                     // Haptic feedback
-                    if (navigator.vibrate) navigator.vibrate(25);
+                    haptic(25);
                 });
             }
         });
@@ -188,7 +213,7 @@
                     showToast('ปิด PS Mode', 'info');
                 }
 
-                if (navigator.vibrate) navigator.vibrate(20);
+                haptic(20);
             });
         }
 
@@ -416,7 +441,7 @@
         dom.submitBtn.classList.add('success');
 
         // Haptic feedback on mobile
-        if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+        haptic([80, 40, 80]);
 
         // Add to history instantly
         const sheetLabel = isHandTools ? '🔧 Hand Tools' : 'Main Sheet';
@@ -672,7 +697,7 @@
             badge.addEventListener('click', () => {
                 dom.prodName.value = kw;
                 updateSubmitButton();
-                if (navigator.vibrate) navigator.vibrate(20); // Small haptic tap
+                haptic(20); // Small haptic tap
             });
             container.appendChild(badge);
         });
