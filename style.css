@@ -1385,3 +1385,22 @@ html {
 .btn-ps-mode:active {
     transform: scale(0.95);
 }
+
+.mode-buttons {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* THX Mode: same button as PS Mode, orange when active */
+.btn-thx-mode.active {
+    background: rgba(249, 115, 22, 0.12) !important;
+    border-color: rgba(249, 115, 22, 0.5) !important;
+    color: #fb923c !important;
+    box-shadow: 0 0 12px rgba(249, 115, 22, 0.25), inset 0 0 6px rgba(249, 115, 22, 0.1) !important;
+}
+
+.btn-thx-mode.active .ps-status-dot {
+    background: #f97316 !important;
+    box-shadow: 0 0 8px #f97316 !important;
+}

@@ -12,6 +12,7 @@
         scriptUrl: localStorage.getItem('appsScriptUrl') || DEFAULT_SCRIPT_URL,
         selectedItemType: '', // Selected type: Cookie, HighComs, or empty
         isPremSearch: localStorage.getItem('premSearchMode') === 'true', // Prem Search Mode (PS in Column K of Prem Sheet)
+        isThx: localStorage.getItem('thxMode') === 'true', // THX Mode (THX in Column K of Prem Sheet)
         isSubmitting: false,
         history: JSON.parse(localStorage.getItem('submitHistory') || '[]'),
     };
@@ -34,6 +35,7 @@
         btnTypeNoRedub: document.getElementById('btnTypeNoRedub'),
         submitBtn: document.getElementById('submitBtn'),
         btnPsMode: document.getElementById('btnPsMode'),
+        btnThxMode: document.getElementById('btnThxMode'),
         historyList: document.getElementById('historyList'),
         clearHistoryBtn: document.getElementById('clearHistoryBtn'),
         toastContainer: document.getElementById('toastContainer'),
@@ -194,28 +196,31 @@
             }
         });
 
-        // PS Mode Toggle Button (Prem Search - writes "PS" to Column K in Prem Sheet)
-        if (dom.btnPsMode) {
-            // Restore saved state
-            if (state.isPremSearch) {
-                dom.btnPsMode.classList.add('active');
-            }
-
-            dom.btnPsMode.addEventListener('click', () => {
-                state.isPremSearch = !state.isPremSearch;
-                localStorage.setItem('premSearchMode', state.isPremSearch ? 'true' : 'false');
-                
-                if (state.isPremSearch) {
-                    dom.btnPsMode.classList.add('active');
-                    showToast('เปิด PS Mode (บันทึก "PS" ลงคอลัมน์ K ของ Prem Sheet)', 'info');
-                } else {
-                    dom.btnPsMode.classList.remove('active');
-                    showToast('ปิด PS Mode', 'info');
-                }
-
-                haptic(20);
-            });
+        // PS / THX Mode Toggle Buttons (write "PS" or "THX" to Column K in Prem Sheet)
+        // ใช้คอลัมน์ K ช่องเดียวกัน จึงเปิดได้ทีละปุ่ม: mode คือ 'PS', 'THX' หรือ '' (ปิดทั้งคู่)
+        function setColumnKMode(mode) {
+            state.isPremSearch = mode === 'PS';
+            state.isThx = mode === 'THX';
+            localStorage.setItem('premSearchMode', state.isPremSearch ? 'true' : 'false');
+            localStorage.setItem('thxMode', state.isThx ? 'true' : 'false');
+            dom.btnPsMode.classList.toggle('active', state.isPremSearch);
+            dom.btnThxMode.classList.toggle('active', state.isThx);
         }
+
+        // Restore saved state
+        setColumnKMode(state.isPremSearch ? 'PS' : (state.isThx ? 'THX' : ''));
+
+        dom.btnPsMode.addEventListener('click', () => {
+            setColumnKMode(state.isPremSearch ? '' : 'PS');
+            showToast(state.isPremSearch ? 'เปิด PS Mode (บันทึก "PS" ลงคอลัมน์ K ของ Prem Sheet)' : 'ปิด PS Mode', 'info');
+            haptic(20);
+        });
+
+        dom.btnThxMode.addEventListener('click', () => {
+            setColumnKMode(state.isThx ? '' : 'THX');
+            showToast(state.isThx ? 'เปิด THX Mode (บันทึก "THX" ลงคอลัมน์ K ของ Prem Sheet)' : 'ปิด THX Mode', 'info');
+            haptic(20);
+        });
 
         // Auto-extract name when link is pasted/typed
         function handleShopLinkAutoExtract() {
@@ -390,12 +395,14 @@
         // Lock submit to prevent double click
         state.isSubmitting = true;
 
-        // แนบ itemType และ PS Mode เข้าไปใน prodName ด้วยตัวคั่น ||| (เพื่อความชัวร์แบบ 100%)
+        // แนบ itemType และ PS/THX Mode เข้าไปใน prodName ด้วยตัวคั่น ||| (เพื่อความชัวร์แบบ 100%)
         let finalProdName = prodName;
         const extraFlags = [];
         extraFlags.push(state.selectedItemType || '');
         if (state.isPremSearch) {
             extraFlags.push('PS');
+        } else if (state.isThx) {
+            extraFlags.push('THX');
         }
         if (extraFlags.length > 0) {
             finalProdName = prodName + '|||' + extraFlags.join('|||');
@@ -409,6 +416,7 @@
             prodName: finalProdName,
             handTools: isHandTools,
             premSearch: state.isPremSearch,
+            thxMode: state.isThx,
         });
         // แปลงอักขระ non-ASCII (ภาษาไทย) เป็น Unicode escape เพื่อป้องกันปัญหา encoding ตอนส่งข้อมูล
         const safeBody = postBody.replace(/[\u007F-\uFFFF]/g, (c) => {

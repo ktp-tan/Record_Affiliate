@@ -1,5 +1,5 @@
 // ============================================
-// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.22.0)
+// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.24.0)
 // ============================================
 // วิธีติดตั้ง:
 // 1. เปิด Google Sheet "GodofAff Sheet"
@@ -490,18 +490,21 @@ function doPost(e) {
       var shopLink = String(data.shopLink || "").trim();
       var isHandTools = data.handTools === true;
       
-      // แยก itemType และ PS Mode ออกจาก prodName (หน้าเว็บส่งมาในรูปแบบ "ชื่อสินค้า|||Cookie|||PS")
+      // แยก itemType และ PS/THX Mode ออกจาก prodName (หน้าเว็บส่งมาในรูปแบบ "ชื่อสินค้า|||Cookie|||PS" หรือ "ชื่อสินค้า|||Cookie|||THX")
       var rawProdName = String(data.prodName || "").trim();
       var productName = "";
       var itemType = "";
       var isPremSearch = data.premSearch === true || (e && e.parameter && e.parameter.premSearch === "true");
-      
+      var isThx = data.thxMode === true || (e && e.parameter && e.parameter.thxMode === "true");
+
       if (rawProdName.indexOf("|||") !== -1) {
         var parts = rawProdName.split("|||");
         productName = parts[0] ? parts[0].trim() : "";
         itemType = parts[1] ? parts[1].trim() : "";
         if (parts[2] && parts[2].trim() === "PS") {
           isPremSearch = true;
+        } else if (parts[2] && parts[2].trim() === "THX") {
+          isThx = true;
         }
       } else {
         productName = rawProdName;
@@ -563,9 +566,9 @@ function doPost(e) {
         var targetRowSecond = existingSecondRow !== -1 ? existingSecondRow : (lastRowInSecond + 1);
         sheetSecond.getRange(targetRowSecond, 1, 1, 4).setValues([[clipLink, shopLink, productName, itemType]]);
         
-        // ถ้าเปิดใช้งาน PS Mode และบันทึกลง Prem Sheet ให้ใส่คำว่า "PS" ในคอลัมน์ K (คอลัมน์ที่ 11)
-        if (secondSheetName === "Prem Sheet" && isPremSearch) {
-          sheetSecond.getRange(targetRowSecond, 11).setValue("PS");
+        // ถ้าเปิดใช้งาน PS/THX Mode และบันทึกลง Prem Sheet ให้ใส่คำว่า "PS" หรือ "THX" ในคอลัมน์ K (คอลัมน์ที่ 11)
+        if (secondSheetName === "Prem Sheet" && (isPremSearch || isThx)) {
+          sheetSecond.getRange(targetRowSecond, 11).setValue(isPremSearch ? "PS" : "THX");
         }
       }
       
@@ -633,6 +636,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.22.0)"
+    message: "Record Affiliate API is running! (v3.24.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
