@@ -10,7 +10,7 @@
 
     const state = {
         scriptUrl: localStorage.getItem('appsScriptUrl') || DEFAULT_SCRIPT_URL,
-        selectedItemType: '', // Selected type: Cookie, HighComs, or empty
+        selectedItemType: '', // Selected type: ไม่สลับฉาก (No Cut), Blur TH, No Re-dub, or empty
         isPremSearch: localStorage.getItem('premSearchMode') === 'true', // Prem Search Mode (PS in Column K of Prem Sheet)
         isThx: localStorage.getItem('thxMode') === 'true', // THX Mode (THX in Column K of Prem Sheet)
         isSubmitting: false,
@@ -30,7 +30,7 @@
         prodName: document.getElementById('prodName'),
         handToolsCheck: document.getElementById('handToolsCheck'),
         handToolsToggle: document.getElementById('handToolsToggle'),
-        btnTypeCookie: document.getElementById('btnTypeCookie'),
+        btnTypeNoCut: document.getElementById('btnTypeNoCut'),
         btnTypeHighComs: document.getElementById('btnTypeHighComs'),
         btnTypeNoRedub: document.getElementById('btnTypeNoRedub'),
         submitBtn: document.getElementById('submitBtn'),
@@ -165,8 +165,8 @@
             });
         }
 
-        // Item Type selection buttons (Cookie, HighComs, No Re-dub)
-        const typeButtons = [dom.btnTypeCookie, dom.btnTypeHighComs, dom.btnTypeNoRedub];
+        // Item Type selection buttons (No Cut, Blur TH, No Re-dub)
+        const typeButtons = [dom.btnTypeNoCut, dom.btnTypeHighComs, dom.btnTypeNoRedub];
         typeButtons.forEach(btn => {
             if (btn) {
                 btn.addEventListener('click', () => {
@@ -473,7 +473,7 @@
         
         // Reset item type selection
         state.selectedItemType = '';
-        if (dom.btnTypeCookie) dom.btnTypeCookie.classList.remove('active');
+        if (dom.btnTypeNoCut) dom.btnTypeNoCut.classList.remove('active');
         if (dom.btnTypeHighComs) dom.btnTypeHighComs.classList.remove('active');
         if (dom.btnTypeNoRedub) dom.btnTypeNoRedub.classList.remove('active');
         

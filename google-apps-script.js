@@ -490,7 +490,7 @@ function doPost(e) {
       var shopLink = String(data.shopLink || "").trim();
       var isHandTools = data.handTools === true;
       
-      // แยก itemType และ PS/THX Mode ออกจาก prodName (หน้าเว็บส่งมาในรูปแบบ "ชื่อสินค้า|||Cookie|||PS" หรือ "ชื่อสินค้า|||Cookie|||THX")
+      // แยก itemType และ PS/THX Mode ออกจาก prodName (หน้าเว็บส่งมาในรูปแบบ "ชื่อสินค้า|||ไม่สลับฉาก|||PS" หรือ "ชื่อสินค้า|||ไม่สลับฉาก|||THX")
       var rawProdName = String(data.prodName || "").trim();
       var productName = "";
       var itemType = "";

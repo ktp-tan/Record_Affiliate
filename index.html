@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=3.24.0">
+    <link rel="stylesheet" href="style.css?v=3.25.0">
 </head>
 
 <body>
@@ -157,16 +157,18 @@
 
             <!-- Item Type Selection -->
             <div class="item-type-group">
-                <button type="button" class="btn-type-select" id="btnTypeCookie" data-value="Cookie">
+                <button type="button" class="btn-type-select" id="btnTypeNoCut" data-value="ไม่สลับฉาก">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <circle cx="8" cy="12" r="1.5" fill="currentColor"/>
-                        <circle cx="12" cy="8" r="1.5" fill="currentColor"/>
-                        <circle cx="16" cy="12" r="1.5" fill="currentColor"/>
-                        <circle cx="12" cy="16" r="1.5" fill="currentColor"/>
-                        <circle cx="12" cy="12" r="1.5" fill="currentColor"/>
+                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                        <line x1="7" y1="2" x2="7" y2="22"/>
+                        <line x1="17" y1="2" x2="17" y2="22"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <line x1="2" y1="7" x2="7" y2="7"/>
+                        <line x1="2" y1="17" x2="7" y2="17"/>
+                        <line x1="17" y1="17" x2="22" y2="17"/>
+                        <line x1="17" y1="7" x2="22" y2="7"/>
                     </svg>
-                    Cookie
+                    No Cut
                 </button>
                 <button type="button" class="btn-type-select" id="btnTypeHighComs" data-value="Blur TH">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -209,7 +211,7 @@
             </button>
             <!-- Bottom Controls & Version Tag -->
             <div class="bottom-controls">
-                <div class="version-tag">v3.24.0</div>
+                <div class="version-tag">v3.25.0</div>
                 <div class="mode-buttons">
                     <button type="button" class="btn-ps-mode" id="btnPsMode" title="เปิด/ปิด Prem Search Mode (เพิ่ม PS ในคอลัมน์ K ของ Prem Sheet)">
                         <span class="ps-status-dot"></span>
@@ -262,6 +264,6 @@
     <!-- Toast Notification -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <script src="script.js?v=3.24.0"></script>
+    <script src="script.js?v=3.25.0"></script>
 </body>
 </html>
