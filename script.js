@@ -28,8 +28,6 @@
         clipLink: document.getElementById('clipLink'),
         shopLink: document.getElementById('shopLink'),
         prodName: document.getElementById('prodName'),
-        handToolsCheck: document.getElementById('handToolsCheck'),
-        handToolsToggle: document.getElementById('handToolsToggle'),
         btnTypeNoCut: document.getElementById('btnTypeNoCut'),
         btnTypeHighComs: document.getElementById('btnTypeHighComs'),
         btnTypeNoRedub: document.getElementById('btnTypeNoRedub'),
@@ -153,17 +151,6 @@
         // Input change -> update submit button
         dom.clipLink.addEventListener('input', updateSubmitButton);
         dom.shopLink.addEventListener('input', updateSubmitButton);
-
-        // Hand Tools checkbox state change fallback for styling
-        if (dom.handToolsCheck && dom.handToolsToggle) {
-            dom.handToolsCheck.addEventListener('change', () => {
-                if (dom.handToolsCheck.checked) {
-                    dom.handToolsToggle.classList.add('checked');
-                } else {
-                    dom.handToolsToggle.classList.remove('checked');
-                }
-            });
-        }
 
         // Item Type selection buttons (No Cut, Blur TH, No Re-dub)
         const typeButtons = [dom.btnTypeNoCut, dom.btnTypeHighComs, dom.btnTypeNoRedub];
@@ -371,7 +358,6 @@
         const clipLink = dom.clipLink.value.trim();
         const shopLink = dom.shopLink.value.trim();
         const prodName = dom.prodName.value.trim();
-        const isHandTools = dom.handToolsCheck.checked;
 
         if (!clipLink) {
             showToast('กรุณากรอกลิงก์คลิป', 'error');
@@ -414,7 +400,6 @@
             clipLink: clipLink,
             shopLink: shopLink,
             prodName: finalProdName,
-            handTools: isHandTools,
             premSearch: state.isPremSearch,
             thxMode: state.isThx,
         });
@@ -452,7 +437,7 @@
         haptic([80, 40, 80]);
 
         // Add to history instantly
-        const sheetLabel = isHandTools ? '🔧 Hand Tools' : 'Main Sheet';
+        const sheetLabel = 'Main Sheet';
         const displayShopLink = shopLink || (getLastShopeeLink() || '(ใช้ลิงก์ล่าสุดจากชีต)');
         const displayProdName = prodName || (shopLink ? '' : (getLastProdName() || ''));
         addToHistory(clipLink, displayShopLink, sheetLabel, displayProdName);
@@ -468,8 +453,6 @@
         dom.clipLink.value = '';
         dom.shopLink.value = '';
         dom.prodName.value = '';
-        dom.handToolsCheck.checked = false;
-        if (dom.handToolsToggle) dom.handToolsToggle.classList.remove('checked');
         
         // Reset item type selection
         state.selectedItemType = '';
