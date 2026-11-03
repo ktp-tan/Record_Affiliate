@@ -1,5 +1,5 @@
 // ============================================
-// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.24.0)
+// Google Apps Script สำหรับ Record Affiliate (เวอร์ชัน Deduplication & High-Reliability v3.26.0)
 // ============================================
 // วิธีติดตั้ง:
 // 1. เปิด Google Sheet "GodofAff Sheet"
@@ -442,6 +442,22 @@ function onEdit(e) {
 }
 
 // ฟังก์ชันย่อยสำหรับค้นหาแถวจากลิงก์
+// หาแถวล่าสุดใน Prem Sheet ที่คอลัมน์ K ตรงกับโหมด ("PS"/"THX") และมีลิงก์ Shopee
+function findLastShopByMode(sheet, mode) {
+  if (!sheet) return null;
+  var lastRow = getLastRowOfColA(sheet);
+  if (lastRow < 2) return null;
+  var shopValues = sheet.getRange(2, 2, lastRow - 1, 2).getValues(); // B:C
+  var modeValues = sheet.getRange(2, 11, lastRow - 1, 1).getValues(); // K
+  for (var i = shopValues.length - 1; i >= 0; i--) {
+    var shop = String(shopValues[i][0] || "").trim();
+    if (shop && String(modeValues[i][0] || "").trim() === mode) {
+      return { shopLink: shop, productName: String(shopValues[i][1] || "").trim() };
+    }
+  }
+  return null;
+}
+
 function findRowByLink(values, tiktokLink, shopLink) {
   if (!tiktokLink && !shopLink) return -1;
   for (var i = 0; i < values.length; i++) {
@@ -518,7 +534,17 @@ function doPost(e) {
       var ss = getSpreadsheet();
       var sheetMain = ss.getSheetByName("Main Sheet");
       
-      // ถ้าไม่ได้ส่ง shopLink มา (เว้นว่างไว้) ให้ดึง shopLink และชื่อสินค้าจากแถวล่าสุดของ Main Sheet อัตโนมัติ
+      // ถ้าไม่ได้ส่ง shopLink มา และเปิด PS/THX อยู่ ให้ดึงจากแถวล่าสุดใน Prem Sheet ที่คอลัมน์ K เป็นโหมดเดียวกัน
+      // (ทำงาน 2 คนพร้อมกัน คนเปิด PS กับคนเปิด THX จะได้ลิงก์ของตัวเอง ไม่ปนกัน)
+      if (!shopLink && !isHandTools && (isPremSearch || isThx)) {
+        var sameMode = findLastShopByMode(ss.getSheetByName("Prem Sheet"), isPremSearch ? "PS" : "THX");
+        if (sameMode) {
+          shopLink = sameMode.shopLink;
+          if (!productName) productName = sameMode.productName;
+        }
+      }
+
+      // ถ้ายังไม่มี shopLink (ปิดทั้ง 2 โหมด หรือหาแถวโหมดเดียวกันไม่เจอ) ให้ดึงจากแถวล่าสุดของ Main Sheet
       if (!shopLink && sheetMain) {
         var prevRow = getLastRowOfColA(sheetMain);
         if (prevRow >= 2) {
@@ -636,6 +662,6 @@ function doGet(e) {
 
   return ContentService.createTextOutput(JSON.stringify({
     status: "ok",
-    message: "Record Affiliate API is running! (v3.24.0)"
+    message: "Record Affiliate API is running! (v3.26.0)"
   })).setMimeType(ContentService.MimeType.JSON);
 }
